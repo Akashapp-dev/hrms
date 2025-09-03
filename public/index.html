@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HRMS</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+
+    <!-- ================= Login Page (overlay) ================= -->
+    <div id="login" class="login-page">
+      <div class="login-layout">
+        <!-- Left: LEISTER logo -->
+        <div class="login-left">
+          <!-- use <img> (crisp scaling) -->
+          <img
+            src="assets/images/leister-logo.png"
+            alt="Leister"
+            class="login-logo-img"
+            loading="eager"
+            width="640" height="160"
+          />
+        </div>
+
+        <!-- Right: Login card -->
+        <div class="login-right">
+          <form id="overlay-login-form" class="login-card" autocomplete="on">
+            <h1 class="title">Welcome Back!</h1>
+            <p class="subtitle">Sign in to continue to LTIN HR.</p>
+
+            <label for="ov-username">Enter User ID</label>
+            <input id="ov-username" name="username" type="text" placeholder="User ID" required />
+
+            <label for="ov-password">Enter Password</label>
+            <input id="ov-password" name="password" type="password" placeholder="Password" required />
+
+            <button class="btn" type="submit">Login</button>
+
+            <div class="links">
+              <a href="#">Forgot password?</a>
+              <a href="#">Need help?</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <!-- ======================================================== -->
+
+    <header class="topbar">
+      <button id="burger" class="burger hidden" aria-label="Menu">☰</button>
+      <h1>HRMS</h1>
+      <div id="user-info" class="userinfo"></div>
+      <button id="logout-btn" class="hidden">Logout</button>
+    </header>
+
+    <nav id="drawer" class="drawer hidden">
+      <a href="#/home" data-route>Home</a>
+      <a href="#/templates" data-route>Templates</a>
+      <a href="#/compose" data-route>Compose</a>
+      <a href="#/letters" data-route>Letters</a>
+      <a href="#/profile" data-route>Profile</a>
+      <a href="#/admin/users" data-route class="admin-only hidden">Users</a>
+    </nav>
+
+    <main id="app" class="page container"></main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
