@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -28,14 +29,17 @@ app.use('/api/documents', requireAuth, documentsRouter);
 
 // Serve static frontend
 const publicDir = path.join(__dirname, '..', 'public');
+// If a prebuilt dist exists, serve it first so /app.js and /styles.css resolve to minified builds
+app.use(express.static(path.join(publicDir, 'dist')));
 app.use(express.static(publicDir));
 
 // Fallback to index.html for SPA style routes
 app.get('*', (req, res) => {
+  const distIndex = path.join(publicDir, 'dist', 'index.html');
+  if (fs.existsSync(distIndex)) return res.sendFile(distIndex);
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 app.listen(PORT, () => {
   console.log(`HRMS Template App running on http://localhost:${PORT}`);
 });
-

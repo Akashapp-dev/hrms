@@ -92,9 +92,11 @@ authRouter.post('/login', (req, res) => {
   if (!user) return res.status(400).json({ error: 'Invalid credentials' });
   if (!bcrypt.compareSync(password || '', user.passwordHash))
     return res.status(400).json({ error: 'Invalid credentials' });
-  const token = signToken(user);
+  // Update last activity timestamp on successful login
+  const bumped = updateRecord('users', user.id, {});
+  const token = signToken(bumped || user);
   setAuthCookie(res, token);
-  const { passwordHash, ...safe } = user;
+  const { passwordHash, ...safe } = (bumped || user);
   res.json({ user: safe, token });
 });
 

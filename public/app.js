@@ -46,6 +46,10 @@ function setUser(user){
   document.querySelectorAll('.admin-only').forEach(el=>{
     el.classList.toggle('hidden', !(user && user.role==='admin'));
   });
+  // Hide Compose for viewers (Templates remain visible read-only)
+  const navCmp = document.querySelector('nav a[href="#/compose"]');
+  const isViewer = !!user && user.role === 'viewer';
+  if(navCmp) navCmp.classList.toggle('hidden', isViewer);
   const drawer = document.getElementById('drawer');
   if(!user){
     drawer.classList.add('hidden');
@@ -102,7 +106,7 @@ async function handleRoute(){
   // auth guard
   if(route?.auth && !state.user){ return redirectTo('#/login'); }
   if(route?.roles && state.user && !route.roles.includes(state.user.role)){
-    return redirectTo('#/templates');
+    return redirectTo('#/home');
   }
   app.innerHTML = '';
   await route.render();
@@ -178,6 +182,8 @@ async function viewTemplates(){
     ['template-name','template-desc','template-content'].forEach(id=>{
       const el = document.getElementById(id); if (el) el.setAttribute('readonly','true');
     });
+    const goCompose = document.getElementById('go-compose');
+    if(goCompose) goCompose.classList.add('hidden');
   }
 }
 
@@ -277,7 +283,12 @@ function updateVars(){
     const input = document.createElement('textarea');
     input.rows = 2;
     input.value = state.data[v] || '';
-    input.addEventListener('input', (e)=>{ state.data[v] = e.target.value; livePreview(); });
+    if(state.user?.role === 'viewer'){
+      input.setAttribute('readonly','true');
+      input.disabled = true;
+    } else {
+      input.addEventListener('input', (e)=>{ state.data[v] = e.target.value; livePreview(); });
+    }
     row.appendChild(label);
     row.appendChild(input);
     panel.appendChild(row);
@@ -305,7 +316,12 @@ function renderCustomFields(){
     if(f.multiline){ control.rows = 2; }
     control.placeholder = f.label;
     control.value = state.data[f.key] || '';
-    control.addEventListener('input', (e)=>{ state.data[f.key] = e.target.value; livePreview(); });
+    if(state.user?.role === 'viewer'){
+      control.setAttribute('readonly','true');
+      control.disabled = true;
+    } else {
+      control.addEventListener('input', (e)=>{ state.data[f.key] = e.target.value; livePreview(); });
+    }
     row.appendChild(label);
     row.appendChild(control);
     container.appendChild(row);
@@ -397,7 +413,7 @@ async function viewHome(){
     <h2>Home</h2>
     <p style="color:var(--muted)">Start by choosing a template to create a letter, or manage your templates.</p>
     <div class="tile-grid" style="margin-top:8px">
-      <div class="tile">
+      <div class="tile" id="tile-templates">
         <h3 style="margin-top:0">Templates</h3>
         <p style="color:var(--muted)">${count} available</p>
         <div class="row" style="gap:8px"><button id="go-templates" class="secondary">Manage</button><button id="qc-create" class="success">Quick Create</button></div>
@@ -419,6 +435,13 @@ async function viewHome(){
     const created = await api.createTemplate({ name, description:'', content:'Hello {{name}}' });
     state.templates.push(created); state.currentId = created.id; navigate('#/templates');
   };
+  // For viewers, disable Quick Create (still allow Manage to view Templates)
+  if(state.user?.role === 'viewer'){
+    const qcBtn = document.getElementById('qc-create');
+    const qcName = document.getElementById('qc-name');
+    if(qcBtn) qcBtn.classList.add('hidden');
+    if(qcName) qcName.disabled = true;
+  }
   if(isAdmin){
     const quCreate = document.getElementById('qu-create');
     if(quCreate){
@@ -616,7 +639,7 @@ function renderUserDetail(){
 addRoute('#/login', viewLogin, { title:'Login' });
 addRoute('#/home', async ()=>{ await viewHome(); }, { auth:true, title:'Home' });
 addRoute('#/templates', viewTemplates, { auth:true, title:'Templates' });
-addRoute('#/compose', viewCompose, { auth:true, title:'Compose' });
+addRoute('#/compose', viewCompose, { auth:true, roles:['admin','editor'], title:'Compose' });
 addRoute('#/letters', viewDocuments, { auth:true, title:'Letters' });
 addRoute('#/profile', async ()=>{ await viewProfile(); }, { auth:true, title:'Profile' });
 addRoute('#/admin/users', viewAdminUsers, { auth:true, roles:['admin'], title:'Users' });
