@@ -10,6 +10,7 @@ async function main() {
   const distDir = path.join(publicDir, 'dist');
   const src = path.join(publicDir, 'index.html');
   const out = path.join(distDir, 'index.html');
+  const assetsSrc = path.join(publicDir, 'assets');
 
   try {
     await fs.mkdir(distDir, { recursive: true });
@@ -22,6 +23,16 @@ async function main() {
     html = html.trim();
     await fs.writeFile(out, html, 'utf8');
     console.log(`Minified index.html -> ${path.relative(publicDir, out)}`);
+
+    // Copy static assets (images, etc.)
+    try {
+      const stat = await fs.stat(assetsSrc);
+      if (stat && stat.isDirectory()) {
+        const dest = path.join(distDir, 'assets');
+        await fs.cp(assetsSrc, dest, { recursive: true });
+        console.log(`Copied assets -> ${path.relative(publicDir, dest)}`);
+      }
+    } catch {}
   } catch (err) {
     console.error('Failed to minify index.html:', err);
     process.exit(1);

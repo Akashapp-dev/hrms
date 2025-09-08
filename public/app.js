@@ -1,26 +1,28 @@
 const $ = (sel) => document.querySelector(sel);
 const app = $('#app');
+// API base for split hosting (GitHub Pages + hosted API)
+const API_BASE = (window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '')).replace(/\/$/, '');
 
 // -------- API --------
 const api = {
-  async me() { const r = await fetch('/api/me', { credentials:'same-origin' }); return r.json(); },
+  async me() { const r = await fetch(API_BASE + '/api/me', { credentials: API_BASE ? 'include' : 'same-origin' }); return r.json(); },
   async login(username, password){
-    const r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({username,password})});
+    const r = await fetch(API_BASE + '/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify({username,password})});
     if(!r.ok) throw new Error((await r.json()).error||'Login failed');
     return r.json();
   },
-  async logout(){ await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'}); },
-  async listTemplates(){ const r=await fetch('/api/templates',{credentials:'same-origin'}); return (await r.json()).items; },
-  async createTemplate(t){ const r=await fetch('/api/templates',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Create failed'); return (await r.json()).item; },
-  async updateTemplate(id,t){ const r=await fetch(`/api/templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Update failed'); return (await r.json()).item; },
-  async deleteTemplate(id){ const r=await fetch(`/api/templates/${id}`,{method:'DELETE',credentials:'same-origin'}); if(!r.ok) throw new Error('Delete failed'); },
-  async listDocs(){ const r=await fetch('/api/documents',{credentials:'same-origin'}); return (await r.json()).items; },
-  async render(body){ const r=await fetch('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error('Render failed'); return (await r.json()).item; },
+  async logout(){ await fetch(API_BASE + '/api/auth/logout',{method:'POST',credentials: API_BASE ? 'include' : 'same-origin'}); },
+  async listTemplates(){ const r=await fetch(API_BASE + '/api/templates',{credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
+  async createTemplate(t){ const r=await fetch(API_BASE + '/api/templates',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Create failed'); return (await r.json()).item; },
+  async updateTemplate(id,t){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Update failed'); return (await r.json()).item; },
+  async deleteTemplate(id){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'DELETE',credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete failed'); },
+  async listDocs(){ const r=await fetch(API_BASE + '/api/documents',{credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
+  async render(body){ const r=await fetch(API_BASE + '/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error('Render failed'); return (await r.json()).item; },
   // Admin
-  async listUsers(){ const r = await fetch('/api/auth/users',{credentials:'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'List users failed'); return (await r.json()).users; },
-  async createUser(body){ const r = await fetch('/api/auth/users',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Create user failed'); return (await r.json()).user; },
-  async updateUser(id, body){ const r = await fetch(`/api/auth/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Update user failed'); return (await r.json()).user; },
-  async deleteUser(id){ const r = await fetch(`/api/auth/users/${id}`,{method:'DELETE',credentials:'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'Delete user failed'); }
+  async listUsers(){ const r = await fetch(API_BASE + '/api/auth/users',{credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'List users failed'); return (await r.json()).users; },
+  async createUser(body){ const r = await fetch(API_BASE + '/api/auth/users',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Create user failed'); return (await r.json()).user; },
+  async updateUser(id, body){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Update user failed'); return (await r.json()).user; },
+  async deleteUser(id){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'DELETE',credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'Delete user failed'); }
 };
 // (reserved) PDF helper can be added here if needed
 
@@ -348,10 +350,10 @@ async function downloadPdf(){
   name = name.trim() || suggested;
   if(!name.toLowerCase().endsWith('.pdf')) name += '.pdf';
   try{
-    const r = await fetch('/api/documents/pdf', {
+    const r = await fetch(API_BASE + '/api/documents/pdf', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      credentials:'same-origin',
+      credentials: API_BASE ? 'include' : 'same-origin',
       body: JSON.stringify({ content, data: state.data, templateId: state.currentId || null, fileName: name })
     });
     if(!r.ok){ try{ const j=await r.json(); alert(j.error||'Failed to generate PDF'); }catch{ alert('Failed to generate PDF'); } return; }
@@ -367,7 +369,7 @@ async function downloadPdf(){
 async function onUploadTemplate(e){
   const f = e.target.files && e.target.files[0]; if(!f) return;
   const fd = new FormData(); fd.append('file', f);
-  const r = await fetch('/api/templates/import',{ method:'POST', body: fd, credentials:'same-origin' });
+  const r = await fetch(API_BASE + '/api/templates/import',{ method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin' });
   if(!r.ok){ alert('Import failed'); return; }
   const { name, content, vars, defaults } = await r.json();
   document.getElementById('template-name').value = name || 'Imported Template';
@@ -389,7 +391,7 @@ function renderDocs(){
     const a=document.createElement('a');
     const label = d.fileName || `Doc ${d.id}`;
     a.textContent = label;
-    a.href = d.fileName ? `/api/documents/${d.id}/download-pdf` : `/api/documents/${d.id}/download`;
+    a.href = (API_BASE || '') + (d.fileName ? `/api/documents/${d.id}/download-pdf` : `/api/documents/${d.id}/download`);
     a.target='_blank';
     li.appendChild(a);
     ul.appendChild(li);

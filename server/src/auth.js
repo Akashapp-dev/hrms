@@ -37,10 +37,11 @@ export function signToken(user) {
 }
 
 export function setAuthCookie(res, token) {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie(TOKEN_NAME, token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
     maxAge: TOKEN_MAX_AGE * 1000,
     path: '/',
   });

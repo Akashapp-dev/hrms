@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,22 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+
+// CORS for split hosting (GitHub Pages frontend + hosted API)
+const allowOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow same-origin / curl
+      if (allowOrigins.length === 0 || allowOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
 
 // Public auth routes
 app.use('/api/auth', authRouter);
