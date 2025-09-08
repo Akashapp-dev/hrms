@@ -1,34 +1,58 @@
 const $ = (sel) => document.querySelector(sel);
 const app = $('#app');
+// Responsive breakpoint watcher (avoids heavy resize handling)
+const desktopMQ = window.matchMedia('(min-width: 900px)');
+function applyResponsiveNav(){
+  if(!state.user) return;
+  const drawer = document.getElementById('drawer');
+  if(!drawer) return;
+  if(desktopMQ.matches){
+    // Desktop: drawer docked
+    drawer.classList.remove('hidden');
+  } else {
+    // Mobile: drawer hidden until burger opens it
+    drawer.classList.add('hidden');
+    document.body.classList.remove('nav-open');
+  }
+}
+if (desktopMQ.addEventListener) desktopMQ.addEventListener('change', applyResponsiveNav);
+else if (desktopMQ.addListener) desktopMQ.addListener(applyResponsiveNav);
 // API base for split hosting (GitHub Pages + hosted API)
 const API_BASE = (window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '')).replace(/\/$/, '');
+const TOKEN_KEY = 'hrms_token';
+function getToken(){ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } }
+function setToken(v){ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} }
+function authHeaders(extra={}){ const t=getToken(); return { ...(extra||{}), ...(t ? { Authorization: 'Bearer '+t } : {}) }; }
 
 // -------- API --------
 const api = {
-  async me() { const r = await fetch(API_BASE + '/api/me', { credentials: API_BASE ? 'include' : 'same-origin' }); return r.json(); },
+  async me() { const r = await fetch(API_BASE + '/api/me', { credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() }); return r.json(); },
   async login(username, password){
-    const r = await fetch(API_BASE + '/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify({username,password})});
+    const r = await fetch(API_BASE + '/api/auth/login',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify({username,password})});
     if(!r.ok) throw new Error((await r.json()).error||'Login failed');
-    return r.json();
+    const data = await r.json();
+    setToken(data.token);
+    return data;
   },
-  async logout(){ await fetch(API_BASE + '/api/auth/logout',{method:'POST',credentials: API_BASE ? 'include' : 'same-origin'}); },
-  async listTemplates(){ const r=await fetch(API_BASE + '/api/templates',{credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
-  async createTemplate(t){ const r=await fetch(API_BASE + '/api/templates',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Create failed'); return (await r.json()).item; },
-  async updateTemplate(id,t){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Update failed'); return (await r.json()).item; },
-  async deleteTemplate(id){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'DELETE',credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete failed'); },
-  async listDocs(){ const r=await fetch(API_BASE + '/api/documents',{credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
-  async render(body){ const r=await fetch(API_BASE + '/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error('Render failed'); return (await r.json()).item; },
+  async logout(){ await fetch(API_BASE + '/api/auth/logout',{method:'POST',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); setToken(''); },
+  async listTemplates(){ const r=await fetch(API_BASE + '/api/templates',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
+  async createTemplate(t){ const r=await fetch(API_BASE + '/api/templates',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Create failed'); return (await r.json()).item; },
+  async updateTemplate(id,t){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Update failed'); return (await r.json()).item; },
+  async deleteTemplate(id){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'DELETE',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete failed'); },
+  async listDocs(){ const r=await fetch(API_BASE + '/api/documents',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
+  async render(body){ const r=await fetch(API_BASE + '/api/documents',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error('Render failed'); return (await r.json()).item; },
   // Admin
-  async listUsers(){ const r = await fetch(API_BASE + '/api/auth/users',{credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'List users failed'); return (await r.json()).users; },
-  async createUser(body){ const r = await fetch(API_BASE + '/api/auth/users',{method:'POST',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Create user failed'); return (await r.json()).user; },
-  async updateUser(id, body){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Update user failed'); return (await r.json()).user; },
-  async deleteUser(id){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'DELETE',credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'Delete user failed'); }
+  async listUsers(){ const r = await fetch(API_BASE + '/api/auth/users',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'List users failed'); return (await r.json()).users; },
+  async createUser(body){ const r = await fetch(API_BASE + '/api/auth/users',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Create user failed'); return (await r.json()).user; },
+  async updateUser(id, body){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Update user failed'); return (await r.json()).user; },
+  async deleteUser(id){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'DELETE',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete user failed'); }
 };
 // (reserved) PDF helper can be added here if needed
 
 // -------- State --------
 let state = {
   user: null,
+  authReady: false,
   templates: [],
   currentId: null,
   data: {},
@@ -57,18 +81,14 @@ function setUser(user){
     drawer.classList.add('hidden');
     document.body.classList.remove('nav-open');
   } else {
-    // Responsive: hide drawer by default on small screens, dock on large
-    if(window.innerWidth >= 900){
-      drawer.classList.remove('hidden');
-      document.body.classList.add('nav-open');
-    } else {
-      drawer.classList.add('hidden');
-      document.body.classList.remove('nav-open');
-    }
+    // Let media query decide; ensure initial state applied once
+    applyResponsiveNav();
   }
 }
 
-/* ---------- Overlay login bindings ---------- */
+/* ---------- Overlay login helpers + bindings ---------- */
+function showLoginOverlay(){ const o = document.getElementById('login'); if(o) o.style.display = 'grid'; }
+function hideLoginOverlay(){ const o = document.getElementById('login'); if(o) o.style.display = 'none'; }
 function bindOverlayLogin(){
   const form = document.getElementById('overlay-login-form');
   if(!form) return;
@@ -84,8 +104,7 @@ function bindOverlayLogin(){
       setUser(res.user);
       await bootstrapData();
       // hide overlay and go home
-      const overlay = document.getElementById('login');
-      if(overlay) overlay.style.display = 'none';
+      hideLoginOverlay();
       navigate('#/home');
     }catch(err){
       alert(err.message || 'Login failed');
@@ -105,8 +124,16 @@ window.addEventListener('hashchange', handleRoute);
 async function handleRoute(){
   const path = location.hash || '#/login';
   const route = routes.find(r => r.path === path) || routes.find(r => r.path === '#/not-found');
-  // auth guard
-  if(route?.auth && !state.user){ return redirectTo('#/login'); }
+  // If auth status not determined yet, avoid guarding
+  if(route?.auth && !state.authReady){
+    return; // wait for init() to complete auth check
+  }
+  // auth + role guards (only after authReady)
+  if(route?.auth && !state.user){
+    // Do not change the hash; just show login overlay
+    showLoginOverlay();
+    return; // leave current view empty/unchanged until login
+  }
   if(route?.roles && state.user && !route.roles.includes(state.user.role)){
     return redirectTo('#/home');
   }
@@ -677,32 +704,25 @@ document.querySelectorAll('[data-route]').forEach(a=>a.addEventListener('click',
 }));
 
 (async function init(){
-  const me = await api.me(); setUser(me.user);
+  const me = await api.me();
+  setUser(me.user);
+  state.authReady = true; // mark auth check complete
 
   // Bind overlay form
   bindOverlayLogin();
 
   // Hide overlay if already authed
-  const overlay = document.getElementById('login');
-  if(state.user && overlay) overlay.style.display = 'none';
+  if(state.user) hideLoginOverlay();
 
   if(state.user){
     await bootstrapData();
     if(!location.hash || location.hash==='#/login') navigate('#/home');
   } else {
-    navigate('#/login');
+    // Show overlay only when unauthenticated, keep current hash (no bounce)
+    showLoginOverlay();
   }
   handleRoute();
 
-  window.addEventListener('resize', ()=>{
-    if(!state.user) return;
-    const drawer = document.getElementById('drawer');
-    if(window.innerWidth >= 900){
-      drawer.classList.remove('hidden');
-      document.body.classList.add('nav-open');
-    } else {
-      drawer.classList.add('hidden');
-      document.body.classList.remove('nav-open');
-    }
-  });
+  // Initial responsive apply
+  applyResponsiveNav();
 })();

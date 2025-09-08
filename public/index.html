@@ -4,18 +4,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HRMS</title>
+    <!-- Optional: point assets to a CDN or external host -->
+    <meta name="asset-base" content="" />
+    <script>
+      (function(){
+        try{
+          var meta = document.querySelector('meta[name="asset-base"]');
+          var base = meta && (meta.getAttribute('content')||'').trim();
+          if(!base) return;
+          // Normalize and preconnect to the asset origin
+          base = base.replace(/\/$/, '');
+          var u = new URL(base, location.href);
+          var link = document.createElement('link');
+          link.rel = 'preconnect';
+          link.href = u.origin;
+          document.head.appendChild(link);
+          // Override CSS var before stylesheet loads so only remote image is fetched
+          document.documentElement.style.setProperty('--login-bg-img', 'url(' + base + 'gs://flutter-chat-d0126.appspot.com/Leisterassets/ltcorp-polygon.png)');
+        }catch(e){ /* noop */ }
+      })();
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
 
     <!-- ================= Login Page (overlay) ================= -->
-    <div id="login" class="login-page">
+    <div id="login" class="login-page" style="display:none">
       <div class="login-layout">
         <!-- Left: LEISTER logo -->
         <div class="login-left">
           <!-- use <img> (crisp scaling) -->
           <img
-            src="assets/images/leister-logo.png"
+            src="gs://flutter-chat-d0126.appspot.com/Leisterassets/leister-logo.png"
             alt="Leister"
             class="login-logo-img"
             loading="eager"
