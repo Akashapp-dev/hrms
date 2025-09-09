@@ -28,4 +28,4 @@ Local Dev
 Install: npm --prefix server install
 Run API+static: npm --prefix server run dev (serves public with SPA fallback)
 Build UI: npm --prefix server run build (generates public/dist)
-Want me to also wire a real DB (e.g., Vercel Postgres or MongoDB) and update server/src/db.js accordingly so data persists on Vercel?
+
