@@ -50,25 +50,25 @@ function prepareForPrint(html = '') {
 }
 
 // List documents
-documentsRouter.get('/', (req, res) => {
-  const items = list('documents');
+documentsRouter.get('/', async (req, res) => {
+  const items = await list('documents');
   res.json({ items });
 });
 
 // Render and save a document
 // Body: { templateId?, content?, data }
-documentsRouter.post('/', (req, res) => {
+documentsRouter.post('/', async (req, res) => {
   if (req.user?.role === 'viewer') return res.status(403).json({ error: 'Forbidden' });
   const { templateId, content, data } = req.body || {};
   let tpl = content;
   if (!tpl && templateId) {
-    const t = list('templates').find((x) => x.id === templateId);
+    const t = (await list('templates')).find((x) => x.id === templateId);
     if (!t) return res.status(404).json({ error: 'Template not found' });
     tpl = t.content;
   }
   if (!tpl) return res.status(400).json({ error: 'templateId or content required' });
   const rendered = renderTemplate(tpl, data || {});
-  const doc = add('documents', {
+  const doc = await add('documents', {
     templateId: templateId || null,
     content: tpl,
     data: data || {},
@@ -85,7 +85,7 @@ documentsRouter.post('/pdf', async (req, res) => {
     // Viewers are allowed to download PDFs of what they can preview
     let tpl = content;
     if (!tpl && templateId) {
-      const t = list('templates').find((x) => x.id === templateId);
+      const t = (await list('templates')).find((x) => x.id === templateId);
       if (!t) return res.status(404).json({ error: 'Template not found' });
       tpl = t.content;
     }
@@ -97,7 +97,7 @@ documentsRouter.post('/pdf', async (req, res) => {
     // Save history (include preferred filename if provided)
     let preferred = (fileName || '').trim();
     if (preferred && !preferred.toLowerCase().endsWith('.pdf')) preferred += '.pdf';
-    const doc = add('documents', {
+    const doc = await add('documents', {
       templateId: templateId || null,
       content: tpl,
       data: data || {},
@@ -158,15 +158,15 @@ documentsRouter.post('/pdf', async (req, res) => {
 });
 
 // Get document
-documentsRouter.get('/:id', (req, res) => {
-  const doc = findById('documents', req.params.id);
+documentsRouter.get('/:id', async (req, res) => {
+  const doc = await findById('documents', req.params.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   res.json({ item: doc });
 });
 
 // Download rendered as HTML file
-documentsRouter.get('/:id/download', (req, res) => {
-  const doc = findById('documents', req.params.id);
+documentsRouter.get('/:id/download', async (req, res) => {
+  const doc = await findById('documents', req.params.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   const filename = `document-${doc.id}.html`;
   res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
@@ -177,7 +177,7 @@ documentsRouter.get('/:id/download', (req, res) => {
 // Download as PDF again using stored rendered HTML and saved name
 documentsRouter.get('/:id/download-pdf', async (req, res) => {
   try {
-    const doc = findById('documents', req.params.id);
+    const doc = await findById('documents', req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
     const browser = await launchBrowser();

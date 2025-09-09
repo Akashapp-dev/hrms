@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { readDB, writeDB, add, list, update as updateRecord, remove as removeRecord } from './db.js';
+import { add, list, update as updateRecord, remove as removeRecord } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const TOKEN_NAME = 'hrms_token';
@@ -10,25 +10,20 @@ const TOKEN_MAX_AGE = 60 * 60 * 8; // 8h
 export const authRouter = express.Router();
 
 // Seed an admin if none exists (username: admin, password: admin123)
-function ensureAdmin() {
-  const db = readDB();
-  if (!db.users || db.users.length === 0) {
+export async function ensureAdmin() {
+  const users = await list('users');
+  if (!users || users.length === 0) {
     const passwordHash = bcrypt.hashSync('admin123', 10);
-    db.users.push({
+    await add('users', {
       id: 'seed-admin',
       username: 'admin',
       name: 'Admin',
       dept: '',
       role: 'admin',
       passwordHash,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
     });
-    writeDB(db);
   }
 }
-
-ensureAdmin();
 
 export function signToken(user) {
   return jwt.sign({ sub: user.id, username: user.username, role: user.role }, JWT_SECRET, {
@@ -71,12 +66,12 @@ export function requireRole(role) {
   };
 }
 
-export function currentUser(req, res) {
+export async function currentUser(req, res) {
   const token = req.cookies[TOKEN_NAME] || (req.headers.authorization || '').replace('Bearer ', '');
   if (!token) return res.json({ user: null });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const users = list('users');
+    const users = await list('users');
     const full = users.find((u) => u.id === payload.sub);
     if (!full) return res.json({ user: null });
     const { passwordHash, ...safe } = full;
@@ -86,15 +81,15 @@ export function currentUser(req, res) {
   }
 }
 
-authRouter.post('/login', (req, res) => {
+authRouter.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
-  const users = list('users');
+  const users = await list('users');
   const user = users.find((u) => u.username === username);
   if (!user) return res.status(400).json({ error: 'Invalid credentials' });
   if (!bcrypt.compareSync(password || '', user.passwordHash))
     return res.status(400).json({ error: 'Invalid credentials' });
   // Update last activity timestamp on successful login
-  const bumped = updateRecord('users', user.id, {});
+  const bumped = await updateRecord('users', user.id, {});
   const token = signToken(bumped || user);
   setAuthCookie(res, token);
   const { passwordHash, ...safe } = (bumped || user);
@@ -107,28 +102,28 @@ authRouter.post('/logout', (req, res) => {
 });
 
 // Admin can create users with roles
-authRouter.post('/users', requireAuth, requireRole('admin'), (req, res) => {
+authRouter.post('/users', requireAuth, requireRole('admin'), async (req, res) => {
   const { username, name, role = 'editor', password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
-  const users = list('users');
+  const users = await list('users');
   if (users.some((u) => u.username === username)) return res.status(400).json({ error: 'Username taken' });
   const passwordHash = bcrypt.hashSync(password, 10);
-  const user = add('users', { username, name: name || username, role, dept: '', passwordHash });
+  const user = await add('users', { username, name: name || username, role, dept: '', passwordHash });
   const { passwordHash: ph, ...safe } = user;
   res.json({ user: safe });
 });
 
 // Admin: list users (no password hash)
-authRouter.get('/users', requireAuth, requireRole('admin'), (req, res) => {
-  const users = list('users').map(({ passwordHash, ...rest }) => rest);
+authRouter.get('/users', requireAuth, requireRole('admin'), async (req, res) => {
+  const users = (await list('users')).map(({ passwordHash, ...rest }) => rest);
   res.json({ users });
 });
 
 // Admin: update user (name, role, optional password)
-authRouter.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
+authRouter.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
   const { name, role, password } = req.body || {};
-  const dbUsers = list('users');
+  const dbUsers = await list('users');
   const target = dbUsers.find((u) => u.id === id);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
@@ -143,15 +138,15 @@ authRouter.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   if (role !== undefined) updater.role = role;
   if (password) updater.passwordHash = bcrypt.hashSync(password, 10);
 
-  const updated = updateRecord('users', id, updater);
+  const updated = await updateRecord('users', id, updater);
   const { passwordHash, ...safe } = updated;
   res.json({ user: safe });
 });
 
 // Admin: delete user (not self, not last admin)
-authRouter.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
+authRouter.delete('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
-  const dbUsers = list('users');
+  const dbUsers = await list('users');
   const target = dbUsers.find((u) => u.id === id);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (req.user.sub === id) return res.status(400).json({ error: 'Cannot delete yourself' });
@@ -159,15 +154,15 @@ authRouter.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) =>
     const adminCount = dbUsers.filter((u) => u.role === 'admin').length;
     if (adminCount <= 1) return res.status(400).json({ error: 'Cannot delete the last admin' });
   }
-  const ok = removeRecord('users', id);
+  const ok = await removeRecord('users', id);
   if (!ok) return res.status(500).json({ error: 'Delete failed' });
   res.json({ ok: true });
 });
 
 // Current user can update their profile (name, dept)
-authRouter.put('/me', requireAuth, (req, res) => {
+authRouter.put('/me', requireAuth, async (req, res) => {
   const { name, dept } = req.body || {};
-  const updated = updateRecord('users', req.user.sub, { name, dept });
+  const updated = await updateRecord('users', req.user.sub, { name, dept });
   if (!updated) return res.status(404).json({ error: 'User not found' });
   const { passwordHash, ...safe } = updated;
   res.json({ user: safe });

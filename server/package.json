@@ -9,10 +9,12 @@
     "seed": "node seed.js",
     "build": "esbuild ../public/app.js --bundle --minify --format=esm --outfile=../public/dist/app.js && esbuild ../public/styles.css --minify --outfile=../public/dist/styles.css && node ./scripts/minify-html.js",
     "build:watch": "esbuild ../public/app.js --bundle --minify --format=esm --watch --outfile=../public/dist/app.js",
-    "start:prod": "cross-env NODE_ENV=production node server.js"
+    "start:prod": "cross-env NODE_ENV=production node server.js",
+    "migrate:json": "node ./scripts/migrate-from-json-to-pg.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "@neondatabase/serverless": "^0.9.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",

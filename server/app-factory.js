@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { authRouter, currentUser, requireAuth } from './src/auth.js';
+import { authRouter, currentUser, requireAuth, ensureAdmin } from './src/auth.js';
 import { templatesRouter } from './src/templates.js';
 import { documentsRouter } from './src/documents.js';
+import { init as initDb } from './src/db.js';
 
 export function createApp() {
   const app = express();
@@ -39,4 +40,15 @@ export function createApp() {
 
   return app;
 }
-
+  // Ensure DB is ready and admin seeded before handling traffic
+  const ready = (async () => {
+    try {
+      await initDb();
+      await ensureAdmin();
+    } catch (e) {
+      console.error('Initialization error:', e);
+    }
+  })();
+  app.use(async (req, res, next) => {
+    try { await ready; next(); } catch (e) { next(e); }
+  });

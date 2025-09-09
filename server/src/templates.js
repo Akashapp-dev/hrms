@@ -70,42 +70,42 @@ function extractHighlightedPlaceholders(html) {
 /* ----------------------------- routes ----------------------------- */
 
 // List templates
-templatesRouter.get('/', (req, res) => {
-  const items = list('templates');
+templatesRouter.get('/', async (req, res) => {
+  const items = await list('templates');
   res.json({ items });
 });
 
 // Create template
-templatesRouter.post('/', (req, res) => {
+templatesRouter.post('/', async (req, res) => {
   if (req.user?.role === 'viewer') return res.status(403).json({ error: 'Forbidden' });
   const { name, content, description } = req.body || {};
   if (!name || !content) return res.status(400).json({ error: 'name and content required' });
-  const t = add('templates', { name, content, description: description || '' });
+  const t = await add('templates', { name, content, description: description || '' });
   res.json({ item: t });
 });
 
 // Update template
-templatesRouter.put('/:id', (req, res) => {
+templatesRouter.put('/:id', async (req, res) => {
   if (req.user?.role === 'viewer') return res.status(403).json({ error: 'Forbidden' });
   const { id } = req.params;
   const { name, content, description } = req.body || {};
-  const t = update('templates', id, { name, content, description: description || '' });
+  const t = await update('templates', id, { name, content, description: description || '' });
   if (!t) return res.status(404).json({ error: 'Not found' });
   res.json({ item: t });
 });
 
 // Delete template
-templatesRouter.delete('/:id', (req, res) => {
+templatesRouter.delete('/:id', async (req, res) => {
   if (req.user?.role === 'viewer') return res.status(403).json({ error: 'Forbidden' });
   const { id } = req.params;
-  const ok = remove('templates', id);
+  const ok = await remove('templates', id);
   if (!ok) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
 // Get template by id
-templatesRouter.get('/:id', (req, res) => {
-  const t = findById('templates', req.params.id);
+templatesRouter.get('/:id', async (req, res) => {
+  const t = await findById('templates', req.params.id);
   if (!t) return res.status(404).json({ error: 'Not found' });
   res.json({ item: t });
 });
