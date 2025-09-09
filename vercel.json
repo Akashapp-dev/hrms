@@ -1,5 +1,15 @@
 {
-  "installCommand": "npm --prefix server ci",
+  "installCommand": "npm --prefix server install --no-audit --no-fund",
   "buildCommand": "npm --prefix server run build",
-  "outputDirectory": "public/dist/"
+  "outputDirectory": "public/dist/",
+  "functions": {
+    "api/**/*.mjs": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "DATA_DIR": "/tmp/hrms-data"
+  }
 }

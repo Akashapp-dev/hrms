@@ -1,7 +1,23 @@
 import express from 'express';
 import { add, list, findById } from './db.js';
 import { renderTemplate } from './templating.js';
-import puppeteer from 'puppeteer';
+
+// Lazy-load Puppeteer to support both local (puppeteer) and serverless (puppeteer-core + @sparticuz/chromium)
+async function launchBrowser() {
+  try {
+    const puppeteer = (await import('puppeteer')).default;
+    return await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  } catch (e) {
+    const chromium = (await import('@sparticuz/chromium')).default;
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    return await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless ?? true,
+    });
+  }
+}
 
 export const documentsRouter = express.Router();
 
@@ -89,7 +105,7 @@ documentsRouter.post('/pdf', async (req, res) => {
       fileName: preferred || null,
     });
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     const html = `<!doctype html>
       <html>
@@ -164,7 +180,7 @@ documentsRouter.get('/:id/download-pdf', async (req, res) => {
     const doc = findById('documents', req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     const html = `<!doctype html>
       <html>

@@ -6,7 +6,9 @@ import { nanoid } from 'nanoid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const dataDir = path.join(__dirname, '..', '..', 'data');
+const dataDir = process.env.DATA_DIR
+  ? process.env.DATA_DIR
+  : path.join(__dirname, '..', '..', 'data');
 const dbFile = path.join(dataDir, 'db.json');
 
 function ensure() {
@@ -64,4 +66,3 @@ export function list(collection, filterFn = null) {
   const arr = db[collection] || [];
   return filterFn ? arr.filter(filterFn) : arr;
 }
-

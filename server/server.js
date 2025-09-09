@@ -1,48 +1,15 @@
 import express from 'express';
 import fs from 'fs';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { authRouter, requireAuth, requireRole, currentUser } from './src/auth.js';
-import { templatesRouter } from './src/templates.js';
-import { documentsRouter } from './src/documents.js';
+import { createApp } from './app-factory.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const app = express();
+const app = createApp();
 const PORT = process.env.PORT || 3000;
-
-app.use(express.json({ limit: '2mb' }));
-app.use(cookieParser());
-
-// CORS for split hosting (GitHub Pages frontend + hosted API)
-const allowOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // allow same-origin / curl
-      if (allowOrigins.length === 0 || allowOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
-  })
-);
-
-// Public auth routes
-app.use('/api/auth', authRouter);
-
-// Current user helper
-app.get('/api/me', currentUser);
-
-// Protected routers
-app.use('/api/templates', requireAuth, templatesRouter);
-app.use('/api/documents', requireAuth, documentsRouter);
 
 // Serve static frontend
 const publicDir = path.join(__dirname, '..', 'public');
