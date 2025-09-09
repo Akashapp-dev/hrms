@@ -1,9 +1,6 @@
 {
   "installCommand": "npm --prefix server ci",
   "buildCommand": "npm --prefix server run build",
-  "outputDirectory": "public/dist/index.html",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "outputDirectory": "public/dist/"
 }
 

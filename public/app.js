@@ -56,7 +56,12 @@ let state = {
   templates: [],
   currentId: null,
   data: {},
+  varsOrder: [],
+  followPreview: true,
+  _followTimer: null,
+  alwaysFollowUntilSave: true,
   docs: [],
+  docsQuery: '',
   users: [],
   selectedUserId: null,
   creatingUser: false
@@ -151,6 +156,59 @@ function extractVars(tpl){
   const set = new Set(); const re = /{{\s*([a-zA-Z0-9_.]+)\s*}}/g; let m; while((m=re.exec(tpl))) set.add(m[1]); return [...set];
 }
 function simpleRender(tpl, data){ return tpl.replace(/{{\s*([a-zA-Z0-9_.]+)\s*}}/g,(_,k)=> data[k] ?? ''); }
+// Render preview with invisible anchors after each placeholder for auto-scroll
+function renderPreviewWithAnchors(tpl, data){
+  return tpl.replace(/{{\s*([a-zA-Z0-9_.]+)\s*}}/g, (_, k)=>{
+    const val = data[k] ?? '';
+    // Add an invisible anchor after the inserted value to locate it in preview
+    return String(val) + `<span class=\"ph-anchor\" data-ph=\"${k}\"></span>`;
+  });
+}
+
+function scrollPreviewToVar(key, opts={}){
+  const scroller = document.querySelector('.preview-scroll');
+  const target = document.querySelector(`#preview .ph-anchor[data-ph="${key}"]`);
+  if(!scroller || !target) return;
+  const isLast = Array.isArray(state.varsOrder) && state.varsOrder[state.varsOrder.length-1] === key;
+  const block = opts.block || (isLast ? 'end' : 'center');
+  // If last placeholder, ensure we reach the very bottom of the preview
+  if(isLast){
+    try{ scroller.scrollTo({ top: scroller.scrollHeight, behavior: opts.behavior || 'auto' }); }
+    catch{ scroller.scrollTop = scroller.scrollHeight; }
+    return;
+  }
+  try{ target.scrollIntoView({ block, inline:'nearest', behavior: opts.behavior || 'auto' }); }
+  catch{
+    const tRect = target.getBoundingClientRect();
+    const sRect = scroller.getBoundingClientRect();
+    const delta = tRect.top - sRect.top - (block==='end' ? (sRect.height*0.85) : (sRect.height/2));
+    scroller.scrollTop += delta;
+  }
+}
+
+function isAnchorVisible(key){
+  const scroller = document.querySelector('.preview-scroll');
+  const target = document.querySelector(`#preview .ph-anchor[data-ph="${key}"]`);
+  if(!scroller || !target) return false;
+  const sr = scroller.getBoundingClientRect();
+  const tr = target.getBoundingClientRect();
+  const m = 24; // margin
+  return tr.top >= sr.top + m && tr.bottom <= sr.bottom - m;
+}
+
+function initPreviewFollow(){
+  const scroller = document.querySelector('.preview-scroll');
+  if(!scroller) return;
+  const onUserScroll = ()=>{
+    if(state.alwaysFollowUntilSave) return; // keep following until Render & Save
+    state.followPreview = false;
+    if(state._followTimer) clearTimeout(state._followTimer);
+    state._followTimer = setTimeout(()=>{ state.followPreview = true; }, 900);
+  };
+  scroller.addEventListener('wheel', onUserScroll, { passive:true });
+  scroller.addEventListener('touchstart', onUserScroll, { passive:true });
+  scroller.addEventListener('scroll', onUserScroll, { passive:true });
+}
 
 async function viewTemplates(){
   // Templates management only
@@ -256,6 +314,9 @@ async function viewCompose(){
     </div>
   </section>`;
   app.innerHTML = tpl;
+  // Ensure preview always follows until user explicitly renders & saves
+  state.alwaysFollowUntilSave = true;
+  state.followPreview = true;
   // populate templates select
   const sel = document.getElementById('compose-template');
   sel.innerHTML = '';
@@ -279,6 +340,8 @@ async function viewCompose(){
     const z = clamp(getZoom() - 0.05, 0.7, 1.5);
     document.documentElement.style.setProperty('--preview-zoom', z);
   });
+  // Bind preview follow controls to detect manual scrolls
+  initPreviewFollow();
 }
 
 function renderTemplates(){
@@ -302,21 +365,43 @@ function getActiveContent(){
 }
 function updateVars(){
   const content = getActiveContent();
-  const vars = extractVars(content).slice().sort((a,b)=>a.localeCompare(b));
+  // Keep placeholders in the order they appear in the template
+  const vars = extractVars(content).slice();
+  state.varsOrder = vars.slice();
   const panel = $('#vars'); if(!panel) return; panel.innerHTML='';
+
+  const formatPlaceholderLabel = (key)=>{
+    const s = String(key || '')
+      .replace(/[._-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if(!s) return key;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+
+  const autoResize = (ta)=>{
+    if(!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(400, Math.max(38, ta.scrollHeight)) + 'px';
+  };
+
   vars.forEach(v=>{
     const row = document.createElement('div');
-    row.className = 'row';
+    row.className = 'row placeholder-row';
     const label = document.createElement('label');
-    label.textContent = v;
+    label.textContent = formatPlaceholderLabel(v);
     const input = document.createElement('textarea');
     input.rows = 2;
+    input.placeholder = 'Enter ' + formatPlaceholderLabel(v);
     input.value = state.data[v] || '';
+    autoResize(input);
     if(state.user?.role === 'viewer'){
       input.setAttribute('readonly','true');
       input.disabled = true;
     } else {
-      input.addEventListener('input', (e)=>{ state.data[v] = e.target.value; livePreview(); });
+      const isLast = vars[vars.length-1] === v;
+      input.addEventListener('input', (e)=>{ state.data[v] = e.target.value; autoResize(e.target); livePreview(v, { force: isLast }); });
+      input.addEventListener('focus', ()=>{ scrollPreviewToVar(v, { behavior:'smooth' }); });
     }
     row.appendChild(label);
     row.appendChild(input);
@@ -326,7 +411,17 @@ function updateVars(){
   const dBtn = document.getElementById('download-btn'); if(dBtn) dBtn.disabled = !content;
   livePreview();
 }
-function livePreview(){ const content=getActiveContent(); const prev=$('#preview'); if(prev) prev.innerHTML = simpleRender(content, state.data); }
+function livePreview(activeKey, opts={}){
+  const content = getActiveContent();
+  const prev = $('#preview');
+  if(prev){
+    prev.innerHTML = renderPreviewWithAnchors(content, state.data);
+    if(activeKey){
+      const shouldScroll = (opts.force === true) || (state.followPreview && !isAnchorVisible(activeKey));
+      if(shouldScroll){ setTimeout(()=> scrollPreviewToVar(activeKey, { behavior:'smooth', ...opts }), 0); }
+    }
+  }
+}
 function renderCustomFields(){
   const container = document.getElementById('custom-fields'); if(!container) return;
   const fields = [
@@ -349,7 +444,9 @@ function renderCustomFields(){
       control.setAttribute('readonly','true');
       control.disabled = true;
     } else {
-      control.addEventListener('input', (e)=>{ state.data[f.key] = e.target.value; livePreview(); });
+      const isLastCommon = Array.isArray(state.varsOrder) && state.varsOrder[state.varsOrder.length-1] === f.key;
+      control.addEventListener('input', (e)=>{ state.data[f.key] = e.target.value; livePreview(f.key, { force: isLastCommon }); });
+      control.addEventListener('focus', ()=>{ scrollPreviewToVar(f.key, { behavior:'smooth' }); });
     }
     row.appendChild(label);
     row.appendChild(control);
@@ -364,7 +461,19 @@ async function saveTemplate(){
   renderTemplates();
 }
 async function deleteTemplate(){ if(!state.currentId) return; if(!confirm('Delete template?')) return; await api.deleteTemplate(state.currentId); state.templates=state.templates.filter(x=>x.id!==state.currentId); state.currentId=null; renderTemplates(); }
-async function renderDocument(){ const t=getActiveContent(); if(!t) return alert('No template content'); const doc=await api.render({ content:t, data:state.data }); state.docs.push(doc); alert('Document saved. See Letters page to download.'); }
+async function renderDocument(){
+  const t = getActiveContent();
+  if(!t) return alert('No template content');
+  try{
+    const doc = await api.render({ content:t, data:state.data });
+    state.docs.push(doc);
+    // Stop forced follow after saving, so user can freely inspect
+    state.alwaysFollowUntilSave = false;
+    alert('Document saved. See Letters page to download.');
+  }catch(e){
+    alert('Render failed');
+  }
+}
 
 async function downloadPdf(){
   const content = getActiveContent();
@@ -407,13 +516,62 @@ async function onUploadTemplate(e){
 }
 
 async function viewDocuments(){
-  app.innerHTML = `<section class="center container"><h2>Previous Letters</h2><ul id="docs"></ul></section>`;
+  app.innerHTML = `
+    <section class="center container">
+      <h2>Previous Letters</h2>
+      <div class="row" style="margin-top:6px; align-items:center">
+        <input id="doc-search" type="search" placeholder="Search by name, id, or data..." />
+        <button id="doc-clear" class="secondary" style="display:none">Clear</button>
+        <div id="doc-meta" style="margin-left:auto; color:var(--muted); font-size:12px"></div>
+      </div>
+      <ul id="docs"></ul>
+    </section>`;
   if(!state.docs.length) state.docs = await api.listDocs();
+  const input = document.getElementById('doc-search');
+  if(input){
+    input.value = state.docsQuery || '';
+    input.addEventListener('input', ()=>{ state.docsQuery = input.value; renderDocs(); });
+  }
+  const clearBtn = document.getElementById('doc-clear');
+  if(clearBtn){
+    clearBtn.onclick = ()=>{ state.docsQuery=''; if(input) input.value=''; renderDocs(); };
+  }
   renderDocs();
 }
 function renderDocs(){
   const ul=$('#docs'); if(!ul) return; ul.innerHTML='';
-  state.docs.slice().reverse().slice(0,20).forEach(d=>{
+  const meta = document.getElementById('doc-meta');
+  const q = (state.docsQuery||'').trim().toLowerCase();
+  let docs = state.docs.slice().reverse();
+  if(q){
+    const includes = (s)=> (s||'').toString().toLowerCase().includes(q);
+    docs = docs.filter(d=>{
+      const idStr = (d.id||'').toString();
+      const fname = d.fileName || '';
+      let dataVals = '';
+      try{
+        if(d.data && typeof d.data === 'object'){
+          dataVals = Object.values(d.data).filter(v=>v!=null).join(' ');
+        }
+      }catch{}
+      return includes(idStr) || includes(fname) || includes(dataVals);
+    });
+  }
+  const total = docs.length;
+  docs = docs.slice(0,20);
+  const clearBtn = document.getElementById('doc-clear');
+  if(clearBtn) clearBtn.style.display = q ? '' : 'none';
+  if(meta){
+    const showing = docs.length;
+    meta.textContent = `${showing}/${total} shown${q?` for "${state.docsQuery}"`:''}`;
+  }
+  if(docs.length===0){
+    const li=document.createElement('li');
+    li.textContent = q ? 'No matching letters' : 'No letters yet';
+    ul.appendChild(li);
+    return;
+  }
+  docs.forEach(d=>{
     const li=document.createElement('li');
     const a=document.createElement('a');
     const label = d.fileName || `Doc ${d.id}`;

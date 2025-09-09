@@ -7,6 +7,31 @@ import { renderTemplate } from './templating.js';
 
 export const documentsRouter = express.Router();
 
+// Prepare HTML for print/PDF: ensure justified text and Annexure on new page
+function prepareForPrint(html = '') {
+  if (!html || typeof html !== 'string') return '';
+  let out = html;
+
+  // Respect explicit page break markers if present in template
+  out = out.replace(/<hr[^>]*class=["'][^"']*pagebreak[^"']*["'][^>]*\/>/gi, '<div class="page-break"></div>');
+  out = out.replace(/<div[^>]*class=["'][^"']*(?:page-break|pagebreak)[^"']*["'][^>]*><\/div>/gi, '<div class="page-break"></div>');
+
+  // Auto-insert a page break before Annexure section headers if found
+  out = out.replace(/(<h[1-6][^>]*>\s*Annexure[^<]*<\/h[1-6]>)/gi, '<div class="page-break"></div>$1');
+  out = out.replace(/(<p[^>]*>\s*(?:<(?:strong|b)[^>]*>\s*)?Annexure[^<]*(?:<\/(?:strong|b)>)?[^<]*<\/p>)/gi, '<div class="page-break"></div>$1');
+
+  // Wrap Annexure section (from first Annexure header/paragraph to end) for compact styling
+  if (!/class=["'][^"']*annexure-section/i.test(out)) {
+    const m = out.match(/(<h[1-6][^>]*>\s*Annexure[\s\S]*?<\/h[1-6]>|<p[^>]*>\s*(?:<(?:strong|b)[^>]*>\s*)?Annexure[\s\S]*?<\/p>)/i);
+    if (m && m.index != null) {
+      const startIdx = out.indexOf(m[1]);
+      out = out.slice(0, startIdx) + '<div class="annexure-section">' + out.slice(startIdx) + '</div>';
+    }
+  }
+
+  return out;
+}
+
 /**
  * GET /api/documents
  * List last N documents (default 100).
@@ -34,6 +59,8 @@ documentsRouter.post('/', async (req, res) => {
     if (!content) return res.status(400).json({ error: 'Missing content' });
 
     const rendered = renderTemplate(content, data || {});
+    const prepared = prepareForPrint(rendered);
+    const prepared = prepareForPrint(rendered);
     const now = Date.now();
     const doc = {
       id: nanoid(),
@@ -111,11 +138,21 @@ documentsRouter.post('/pdf', async (req, res) => {
           <meta charset="utf-8"/>
           <style>
             @page { size: A4; margin: 18mm 16mm; }
-            body { font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; }
+            body { font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; line-height: 1.5; }
             h1,h2,h3,strong { color: #000; }
+            p, li, div, td, th { text-align: justify; text-justify: inter-word; }
+            h1,h2,h3,h4,h5,h6 { text-align: left; }
+            .page-break { page-break-before: always; break-before: page; }
+            .annexure, .annexure-start { page-break-before: always; break-before: page; }
+            table { width: 100%; border-collapse: collapse; }
+            td, th { vertical-align: top; }
+            /* Annexure: compact tables */
+            .annexure-section { font-size: 12px; }
+            .annexure-section table { width: 100% !important; table-layout: fixed; font-size: 12px !important; }
+            .annexure-section th, .annexure-section td { padding: 4px 6px !important; line-height: 1.3 !important; word-break: break-word; hyphens: auto; }
           </style>
         </head>
-        <body>${rendered}</body>
+        <body>${prepared}</body>
       </html>`;
 
     await page.setContent(html, { waitUntil: 'networkidle0' });

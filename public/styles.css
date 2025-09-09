@@ -215,22 +215,27 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
 .zoom-controls button{ padding:6px 10px; border-radius:6px; font-size:13px }
 .preview-scroll{
   height: auto;
-  max-height: 75vh;        /* show internal scroll for long previews */
+  max-height: 85vh;        /* show more preview; internal scroll for long content */
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border:1px solid var(--border);
   border-radius:8px;
   background:#ffffff;
   padding:12px;
+  overscroll-behavior: contain; /* prevent window scroll while interacting */
 }
 #preview, #preview *{ background:#fff; color:#000 !important }
+/* Invisible anchors used to auto-scroll preview to the edited placeholder */
+.ph-anchor{ display:inline-block; width:0; height:0; overflow:hidden; opacity:0; }
 
 /* A4 page */
 .a4-page{
   background:#fff; color:#000;
   margin:0 auto;
   box-shadow:0 0 0 1px #e5e7eb, 0 3px 12px rgba(0,0,0,.08); /* lighter for perf */
-  width:210mm; min-height:297mm; padding:12mm;
+  width:210mm; min-height:297mm;
+  /* Provide extra space for letterhead at top and footer at bottom */
+  padding:30mm 16mm 20mm 16mm; /* top | right | bottom | left */
   transform:scale(var(--preview-zoom));
   transform-origin: top left;
 }
@@ -238,6 +243,22 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
 @media (min-width:1440px){ :root{ --preview-zoom:1.05 } }
 @media (min-width:1920px){ :root{ --preview-zoom:1.15 } }
 @media print{ .a4-page{ transform:none } }
+
+/* Print-friendly page-break behavior (preview + print) */
+@media print{
+  /* Avoid splitting important blocks across pages */
+  p, h1, h2, h3, h4, h5, h6,
+  ul, ol, li,
+  table, thead, tbody, tr,
+  blockquote, pre {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  /* Reduce orphan/widow lines for paragraphs */
+  p { orphans: 3; widows: 3; }
+  /* Respect explicit page break markers */
+  .page-break { page-break-before: always; break-before: page; }
+}
 
 /* Tight text */
 .a4-page p,.a4-page li,.a4-page td,.a4-page th{ margin:4px 0; line-height:1.38 }
@@ -275,11 +296,20 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
 .placeholders-panel #vars .row,
 .placeholders-panel #custom-fields .row{
   display:grid;
-  grid-template-columns: 160px 1fr;   /* label | input */
+  grid-template-columns: 120px 1fr;   /* label | input */
   align-items:start;
-  gap:10px;
+  gap:12px;
   margin-bottom:10px;
 }
+
+/* Enhanced placeholder rows */
+.placeholders-panel .placeholder-row{
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+}
+.placeholders-panel .placeholder-row:hover{ background:#f9fafb }
 
 /* labels */
 .placeholders-panel #vars label,
@@ -288,12 +318,16 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
   color:#374151;
   font-weight:700;
   margin:0;
-  text-align:right;
-  padding-right:4px;
+  text-align:left;     /* move name text to the left */
+  padding-right:0;     /* free up space for input */
   white-space:normal;
   word-break:break-word;
   overflow:visible;
   text-overflow:clip;
+}
+
+.placeholders-panel .placeholder-row label{
+  color:#111827;
 }
 
 /* inputs */
@@ -320,6 +354,7 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
   resize: vertical;
   transition:border-color .15s ease, box-shadow .15s ease;
 }
+.placeholders-panel textarea::placeholder{ color:#9aa3ad }
 .placeholders-panel input:focus-visible{
   outline:none;
   border-color: var(--accent);
