@@ -3,4 +3,3 @@
   "buildCommand": "npm --prefix server run build",
   "outputDirectory": "public/dist/"
 }
-
