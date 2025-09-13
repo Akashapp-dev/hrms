@@ -90,11 +90,15 @@ function rowToTemplate(r) {
 }
 function rowToDocument(r) {
   if (!r) return null;
+  let dataVal = r.data;
+  if (typeof dataVal === 'string') {
+    try { dataVal = JSON.parse(dataVal); } catch { /* keep as string if invalid */ }
+  }
   return {
     id: r.id,
     templateId: r.template_id,
     content: r.content,
-    data: r.data || {},
+    data: dataVal || {},
     rendered: r.rendered,
     fileName: r.file_name || null,
     createdAt: Number(r.created_at),
@@ -178,7 +182,7 @@ export async function add(collection, item) {
   }
   if (collection === 'documents') {
     const rows = await sql`INSERT INTO documents (id, template_id, content, data, rendered, file_name, created_at, updated_at)
-      VALUES (${id}, ${item.templateId || null}, ${item.content || ''}, ${sql.json(item.data || {})}, ${item.rendered || ''}, ${item.fileName || null}, ${now}, ${now})
+      VALUES (${id}, ${item.templateId || null}, ${item.content || ''}, ${JSON.stringify(item.data || {})}::jsonb, ${item.rendered || ''}, ${item.fileName || null}, ${now}, ${now})
       RETURNING id, template_id, content, data, rendered, file_name, created_at, updated_at`;
     return rowToDocument(rows[0]);
   }
@@ -231,7 +235,7 @@ export async function update(collection, id, updater) {
     const rows = await sql`UPDATE documents SET
       template_id = ${merged.templateId || null},
       content = ${merged.content || ''},
-      data = ${sql.json(merged.data || {})},
+      data = ${JSON.stringify(merged.data || {})}::jsonb,
       rendered = ${merged.rendered || ''},
       file_name = ${merged.fileName || null},
       updated_at = ${now}

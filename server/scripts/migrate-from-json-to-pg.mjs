@@ -113,7 +113,7 @@ async function main() {
     const updated = Number(d.updatedAt || created);
     try {
       await sql`INSERT INTO documents (id, template_id, content, data, rendered, file_name, created_at, updated_at)
-        VALUES (${d.id}, ${d.templateId || null}, ${d.content || ''}, ${sql.json(d.data || {})}, ${d.rendered || ''}, ${d.fileName || null}, ${created}, ${updated})
+        VALUES (${d.id}, ${d.templateId || null}, ${d.content || ''}, ${JSON.stringify(d.data || {})}::jsonb, ${d.rendered || ''}, ${d.fileName || null}, ${created}, ${updated})
         ON CONFLICT (id) DO UPDATE SET
           template_id = EXCLUDED.template_id,
           content = EXCLUDED.content,
@@ -135,4 +135,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-
