@@ -38,8 +38,6 @@ export function createApp() {
   app.use('/api/templates', requireAuth, templatesRouter);
   app.use('/api/documents', requireAuth, documentsRouter);
 
-  return app;
-}
   // Ensure DB is ready and admin seeded before handling traffic
   const ready = (async () => {
     try {
@@ -52,3 +50,6 @@ export function createApp() {
   app.use(async (req, res, next) => {
     try { await ready; next(); } catch (e) { next(e); }
   });
+
+  return app;
+}

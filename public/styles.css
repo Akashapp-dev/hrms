@@ -16,6 +16,7 @@
   --container-max: 1480px;
   --drawer-w: 240px;
   --page-pad: 20px;
+  --topbar-h: 48px;
 
   --preview-zoom: 1;
 
@@ -44,6 +45,7 @@ body{
   font-size:14px;
   line-height:1.45;
   position:relative;
+  padding-top: var(--topbar-h); /* keep content below fixed header */
 }
 
 /* ===== Global LT_CORP background (every screen) ===== */
@@ -75,7 +77,14 @@ h3{ margin:12px 0 6px; font-size:14px; color:var(--muted); font-weight:700 }
 .grid{ display:grid; grid-template-columns:1fr; gap:16px; padding:16px }
 @media (min-width:1000px){ .grid{ grid-template-columns:1fr 1fr } }
 
-.topbar{ display:flex; gap:12px; align-items:center }
+.topbar{
+  display:flex; gap:12px; align-items:center;
+  position: fixed; /* keep header visible while scrolling */
+  top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  z-index: 10010; /* above overlays */
+  background: var(--card);
+}
 .burger{
   padding:3px 8px;
   font-size:12px;
@@ -124,9 +133,9 @@ ul li{ padding:6px; border:1px solid var(--border); border-radius:6px; margin-bo
 
 /* Drawer */
 .drawer{
-  position:fixed; top:48px; left:0; width:var(--drawer-w);
+  position:fixed; top:var(--topbar-h); left:0; width:var(--drawer-w);
   background:#ffffff; border-right:1px solid var(--border);
-  height:calc(100% - 48px); padding:12px 8px;
+  height:calc(100% - var(--topbar-h)); padding:12px 8px;
   display:flex; flex-direction:column; gap:6px; z-index:10
 }
 .drawer a{ color:#1f2937; text-decoration:none; padding:8px; border-radius:6px }
@@ -432,13 +441,14 @@ body.nav-open .page{ padding-left: calc(16px + var(--drawer-w) + 16px) }
 
 /* ========== Login Page (overlay retains same background) ========== */
 .login-page{
-  position: fixed; /* overlay the app */
-  inset: 0;
+  position: fixed; /* overlay the app (below topbar) */
+  top: var(--topbar-h);
+  left: 0; right: 0; bottom: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
   background: var(--brand-white); /* fallback */
-  z-index: 9999;
+  z-index: 10000; /* below topbar */
 }
 .login-page::before{
   content:"";
@@ -586,6 +596,17 @@ html { scroll-behavior: smooth; }
   backface-visibility: hidden;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Safety override: ensure header is pinned on all screens */
+header.topbar{
+  position: fixed !important;
+  top: 0 !important;
+  left: 0; right: 0;
+  height: var(--topbar-h);
+  z-index: 10010;
+  background: var(--card);
+}
+.page{ min-height: calc(100vh - var(--topbar-h)); }
 
 /* Optional: mobile-specific lighter background image if available
 @media (max-width: 900px){

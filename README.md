@@ -1,31 +1,33 @@
-How It Works on Vercel
+Local-Only Setup (Demo on localhost)
 
-Static UI: Built to public/dist and served at the site root (no npm start).
-API: Vercel Function at /api routes requests to the Express app (/api/auth, /api/templates, /api/documents, etc.).
-PDF: Uses headless Chromium in serverless; function memory/time set in vercel.json.
-Deploy Steps
+This repository is configured for local demos only. All cloud deployment configs have been removed.
 
-Push to GitHub and Import into Vercel, or run:
-npm i -g vercel
-vercel (first deploy, follow prompts)
-vercel --prod (production)
-Set environment variables in Vercel:
-JWT_SECRET: a strong secret (required for real use)
-DATA_DIR: left as /tmp/hrms-data in vercel.json (ephemeral; see note below)
-CORS_ORIGIN: not needed for same-origin (/api) setup
-Build happens automatically using:
-Install: npm --prefix server install --no-audit --no-fund
-Build: npm --prefix server run build → public/dist
-Important Notes
+What runs locally
+- Node API + UI: Express serves the frontend (`public`) and API routes under `/api`.
+- Storage: Uses a local JSON file at `data/db.json` when no `DATABASE_URL` is set.
+- PDF: Generated via Puppeteer/Chromium directly from the Node server.
 
-Persistence: /tmp is ephemeral and can reset between invocations. Your JSON file DB will not persist on Vercel. For production, switch server/src/db.js to a real datastore:
-Vercel Postgres/Neon, MongoDB Atlas, Supabase, or Vercel KV.
-I can help replace the simple readDB/writeDB/add/update/remove with a DB-backed implementation.
-Cookies/CORS: With same-origin /api, CORS is not required. Your cookie settings (SameSite=None; Secure in production) are fine on HTTPS.
-Puppeteer size/time: PDF routes are heavier; I set 1024 MB and 60s. Bump if needed.
-Local Dev
+Prerequisites
+- Node.js 18+ (Node 20 recommended)
 
-Install: npm --prefix server install
-Run API+static: npm --prefix server run dev (serves public with SPA fallback)
-Build UI: npm --prefix server run build (generates public/dist)
+Quick start
+1) Install dependencies:
+   - `npm --prefix server ci`  (or `npm --prefix server install`)
+2) Start the app (serves API + frontend):
+   - `npm --prefix server run dev`
+   - Open http://localhost:3000
 
+Default admin for demo
+- Username: `admin`
+- Password: `admin123`
+(Auto-seeded on first run.)
+
+Optional: build optimized assets
+- `npm --prefix server run build`  (outputs to `public/dist/`)
+
+Optional: use Postgres
+- Set `DATABASE_URL` in your environment before starting. The app auto-creates tables and uses Postgres instead of the JSON file.
+
+Notes
+- If Puppeteer fails to download Chromium on first install, ensure internet access and retry `npm --prefix server ci`.
+- The UI calls same-origin `/api`, so no CORS setup is needed for local runs.

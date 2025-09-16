@@ -1,5 +1,6 @@
 import os
-from typing import Optional, List
+import time
+from typing import Optional, Dict, Any
 
 import bcrypt
 import jwt
@@ -7,50 +8,45 @@ from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .db import list_items, add_item, update_item, remove_item, find_by_id, read_db, write_db
-from .templating import render_template
+from .db import init_db, list_items, add_item, update_item, remove_item, find_by_id
+from .templating import render_template, normalize_html, extract_highlighted_placeholders
 
 
 JWT_SECRET = os.getenv('JWT_SECRET', 'dev_secret_change_me')
 TOKEN_NAME = 'hrms_token'
-TOKEN_MAX_AGE = 60 * 60 * 8  # 8h
-
-
-def _seed_admin():
-    db = read_db()
-    users = db.get('users', [])
-    if not users:
-        password_hash = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode('utf-8')
-        users.append({
-            'id': 'seed-admin',
-            'username': 'admin',
-            'name': 'Admin',
-            'dept': '',
-            'role': 'admin',
-            'passwordHash': password_hash,
-            'createdAt': 0,
-            'updatedAt': 0,
-        })
-        db['users'] = users
-        write_db(db)
-
-
-_seed_admin()
+TOKEN_MAX_AGE = 60 * 60 * 8  # seconds
 
 app = FastAPI()
 
-# CORS (allow credentials)
-allow_origins = [o.strip() for o in os.getenv('CORS_ORIGIN', '').split(',') if o.strip()] or ['http://localhost:3000']
+# CORS
+allow_origins = [o.strip() for o in os.getenv('CORS_ORIGIN', '').split(',') if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,
+    allow_origins=allow_origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-def sign_token(user):
+@app.on_event("startup")
+def _startup():
+    init_db()
+    # seed admin if empty
+    users = list_items('users')
+    if not users:
+        pw = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode('utf-8')
+        add_item('users', {
+            'id': 'seed-admin',
+            'username': 'admin',
+            'name': 'Admin',
+            'dept': '',
+            'role': 'admin',
+            'passwordHash': pw,
+        })
+
+
+def sign_token(user: Dict[str, Any]) -> str:
     payload = {"sub": user['id'], "username": user['username'], "role": user['role']}
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
@@ -110,12 +106,19 @@ def login(body: LoginBody, response: Response):
     user = next((u for u in users if u['username'] == body.username), None)
     if not user:
         raise HTTPException(400, 'Invalid credentials')
-    if not bcrypt.checkpw(body.password.encode('utf-8'), user['passwordHash'].encode('utf-8')):
+    if not bcrypt.checkpw(body.password.encode('utf-8'), user['password_hash'].encode('utf-8')) and \
+       not bcrypt.checkpw(body.password.encode('utf-8'), user.get('passwordHash', '').encode('utf-8')):
         raise HTTPException(400, 'Invalid credentials')
     updated = update_item('users', user['id'], {}) or user
-    token = sign_token(updated)
+    # unify field names
+    updated['passwordHash'] = updated.get('passwordHash') or updated.get('password_hash')
+    token = sign_token({
+        'id': updated['id'],
+        'username': updated['username'],
+        'role': updated['role'],
+    })
     set_auth_cookie(response, token)
-    safe = {k: v for k, v in updated.items() if k != 'passwordHash'}
+    safe = {k: v for k, v in updated.items() if k not in ('passwordHash', 'password_hash')}
     return {"user": safe, "token": token}
 
 
@@ -129,11 +132,10 @@ def logout(response: Response):
 def me(user=Depends(current_user)):
     if not user:
         return {"user": None}
-    safe = {k: v for k, v in user.items() if k != 'passwordHash'}
+    safe = {k: v for k, v in user.items() if k not in ('passwordHash', 'password_hash')}
     return {"user": safe}
 
 
-# Admin user management
 class CreateUserBody(BaseModel):
     username: str
     name: Optional[str] = None
@@ -154,13 +156,20 @@ def create_user(body: CreateUserBody, _=Depends(require_role('admin'))):
         'dept': '',
         'passwordHash': pw,
     })
-    safe = {k: v for k, v in user.items() if k != 'passwordHash'}
+    safe = {k: v for k, v in user.items() if k not in ('passwordHash', 'password_hash')}
     return {"user": safe}
 
 
 @app.get('/api/auth/users')
 def list_users(_=Depends(require_role('admin'))):
-    return {"users": [{k: v for k, v in u.items() if k != 'passwordHash'} for u in list_items('users')]}
+    rows = list_items('users')
+    users = []
+    for u in rows:
+        d = dict(u)
+        d.pop('password_hash', None)
+        d.pop('passwordHash', None)
+        users.append(d)
+    return {"users": users}
 
 
 class UpdateUserBody(BaseModel):
@@ -179,7 +188,7 @@ def update_user(id: str, body: UpdateUserBody, _=Depends(require_role('admin')))
         admin_count = len([u for u in db_users if u['role'] == 'admin'])
         if admin_count <= 1:
             raise HTTPException(400, 'Cannot demote the last admin')
-    changes = {}
+    changes: Dict[str, Any] = {}
     if body.name is not None:
         changes['name'] = body.name
     if body.role is not None:
@@ -189,7 +198,7 @@ def update_user(id: str, body: UpdateUserBody, _=Depends(require_role('admin')))
     updated = update_item('users', id, changes)
     if not updated:
         raise HTTPException(404, 'User not found')
-    safe = {k: v for k, v in updated.items() if k != 'passwordHash'}
+    safe = {k: v for k, v in updated.items() if k not in ('passwordHash', 'password_hash')}
     return {"user": safe}
 
 
@@ -214,8 +223,8 @@ def delete_user(id: str, user=Depends(require_role('admin'))):
 # Templates
 class TemplateBody(BaseModel):
     name: str
-    description: Optional[str] = ''
     content: str
+    description: Optional[str] = ""
 
 
 @app.get('/api/templates')
@@ -224,13 +233,17 @@ def list_templates(_=Depends(require_auth)):
 
 
 @app.post('/api/templates')
-def create_template(body: TemplateBody, _=Depends(require_role('admin'))):
+def create_template(body: TemplateBody, user=Depends(require_auth)):
+    if user.get('role') == 'viewer':
+        raise HTTPException(403, 'Forbidden')
     item = add_item('templates', body.model_dump())
     return {"item": item}
 
 
 @app.put('/api/templates/{id}')
-def update_template(id: str, body: TemplateBody, _=Depends(require_role('admin'))):
+def update_template(id: str, body: TemplateBody, user=Depends(require_auth)):
+    if user.get('role') == 'viewer':
+        raise HTTPException(403, 'Forbidden')
     updated = update_item('templates', id, body.model_dump())
     if not updated:
         raise HTTPException(404, 'Not found')
@@ -238,25 +251,38 @@ def update_template(id: str, body: TemplateBody, _=Depends(require_role('admin')
 
 
 @app.delete('/api/templates/{id}')
-def delete_template(id: str, _=Depends(require_role('admin'))):
+def delete_template(id: str, user=Depends(require_auth)):
+    if user.get('role') == 'viewer':
+        raise HTTPException(403, 'Forbidden')
     ok = remove_item('templates', id)
     if not ok:
         raise HTTPException(404, 'Not found')
     return {"ok": True}
 
 
+@app.get('/api/templates/{id}')
+def get_template(id: str, _=Depends(require_auth)):
+    t = find_by_id('templates', id)
+    if not t:
+        raise HTTPException(404, 'Not found')
+    return {"item": t}
+
+
 @app.post('/api/templates/import')
-async def import_template(file: UploadFile = File(...), _=Depends(require_role('admin'))):
-    # Minimal stub: accept HTML or DOCX; for DOCX, return placeholder
+def import_template(file: UploadFile = File(...), _=Depends(require_role('editor'))):
+    import mammoth
     name = os.path.splitext(file.filename)[0] if file.filename else 'Imported Template'
-    data = await file.read()
-    content = ''
-    if (file.filename or '').lower().endswith('.html'):
-        content = data.decode('utf-8', errors='ignore')
+    data = file.file.read()
+    html = ''
+    if (file.filename or '').lower().endswith('.docx'):
+        result = mammoth.convert_to_html(data)
+        html = result.value or ''
     else:
-        # Optional: integrate python-mammoth for DOCX -> HTML
-        content = '<p>(Imported content is not converted; please paste your HTML)</p>'
-    return {"name": name, "content": content, "vars": [], "defaults": {}}
+        html = data.decode('utf-8', errors='ignore')
+    html = normalize_html(html)
+    ph = extract_highlighted_placeholders(html)
+    content = normalize_html(ph['html'])
+    return {"name": name, "content": content, "vars": ph['vars'], "defaults": ph['defaults']}
 
 
 # Documents
@@ -273,7 +299,9 @@ def list_documents(_=Depends(require_auth)):
 
 
 @app.post('/api/documents')
-def render_and_save(body: RenderBody, _=Depends(require_role('editor'))):
+def render_and_save(body: RenderBody, user=Depends(require_auth)):
+    if user.get('role') == 'viewer':
+        raise HTTPException(403, 'Forbidden')
     tpl = body.content
     if not tpl and body.templateId:
         t = find_by_id('templates', body.templateId)
@@ -294,7 +322,7 @@ def render_and_save(body: RenderBody, _=Depends(require_role('editor'))):
 
 
 @app.post('/api/documents/pdf')
-def generate_pdf(body: RenderBody, response: Response, _user=Depends(require_auth)):
+def generate_pdf(body: RenderBody, response: Response, _=Depends(require_auth)):
     from weasyprint import HTML
     tpl = body.content
     if not tpl and body.templateId:
@@ -306,7 +334,6 @@ def generate_pdf(body: RenderBody, response: Response, _user=Depends(require_aut
         raise HTTPException(400, 'templateId or content required')
     rendered = render_template(tpl, body.data or {})
     preferred = (body.fileName or '').strip()
-    # store history like Node route
     doc = add_item('documents', {
         'templateId': body.templateId or None,
         'content': tpl,
@@ -315,7 +342,7 @@ def generate_pdf(body: RenderBody, response: Response, _user=Depends(require_aut
         'fileName': preferred or None,
     })
     html = f"""<!doctype html><html><head><meta charset='utf-8'>
-    <style>@page {{ size: A4; margin: 18mm 16mm; }} body {{ font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; }} h1,h2,h3,strong {{ color: #000; }}</style>
+    <style>@page {{ size: A4; margin: 30mm 16mm 20mm 16mm; }} body {{ font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; line-height: 1.5; }} h1,h2,h3,strong {{ color: #000; }} p, li, div, td, th {{ text-align: justify; text-justify: inter-word; }} .page-break {{ page-break-before: always; break-before: page; }}</style>
     </head><body>{rendered}</body></html>"""
     pdf_bytes = HTML(string=html).write_pdf()
     response.headers['Content-Type'] = 'application/pdf'
@@ -350,10 +377,11 @@ def download_pdf(id: str, response: Response, _=Depends(require_auth)):
     if not doc:
         raise HTTPException(404, 'Not found')
     html = f"""<!doctype html><html><head><meta charset='utf-8'>
-    <style>@page {{ size: A4; margin: 18mm 16mm; }} body {{ font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; }} h1,h2,h3,strong {{ color: #000; }}</style>
+    <style>@page {{ size: A4; margin: 30mm 16mm 20mm 16mm; }} body {{ font-family: system-ui, Segoe UI, Roboto, Ubuntu, sans-serif; color: #111; line-height: 1.5; }} h1,h2,h3,strong {{ color: #000; }}</style>
     </head><body>{doc.get('rendered','')}</body></html>"""
     pdf_bytes = HTML(string=html).write_pdf()
     fname = doc.get('fileName') or f"document-{doc['id']}.pdf"
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
     return Response(content=pdf_bytes, media_type='application/pdf')
+

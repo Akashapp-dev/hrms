@@ -13,15 +13,23 @@ const PORT = process.env.PORT || 3000;
 
 // Serve static frontend
 const publicDir = path.join(__dirname, '..', 'public');
-// If a prebuilt dist exists, serve it first so /app.js and /styles.css resolve to minified builds
-app.use(express.static(path.join(publicDir, 'dist')));
-app.use(express.static(publicDir));
+// In production prefer prebuilt dist; in dev prefer live files for quick edits
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(publicDir, 'dist')));
+  app.use(express.static(publicDir));
+} else {
+  app.use(express.static(publicDir));
+  app.use(express.static(path.join(publicDir, 'dist')));
+}
 
 // Fallback to index.html for SPA style routes
 app.get('*', (req, res) => {
   const distIndex = path.join(publicDir, 'dist', 'index.html');
-  if (fs.existsSync(distIndex)) return res.sendFile(distIndex);
-  res.sendFile(path.join(publicDir, 'index.html'));
+  const pubIndex = path.join(publicDir, 'index.html');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(distIndex)) {
+    return res.sendFile(distIndex);
+  }
+  return res.sendFile(pubIndex);
 });
 
 app.listen(PORT, () => {

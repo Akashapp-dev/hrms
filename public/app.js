@@ -57,6 +57,7 @@ let state = {
   currentId: null,
   data: {},
   varsOrder: [],
+  varsPage: 0,
   followPreview: true,
   _followTimer: null,
   alwaysFollowUntilSave: true,
@@ -257,7 +258,7 @@ async function viewTemplates(){
   $('#delete-template-btn').addEventListener('click', deleteTemplate);
   $('#upload-btn').addEventListener('click', ()=> document.getElementById('upload-input').click());
   document.getElementById('upload-input').addEventListener('change', onUploadTemplate);
-  $('#template-list').addEventListener('change', (e)=>{ state.currentId=e.target.value; renderTemplates(); });
+  $('#template-list').addEventListener('change', (e)=>{ state.currentId=e.target.value; state.varsPage = 0; renderTemplates(); });
   $('#template-content').addEventListener('input', updateVars);
   $('#go-compose').addEventListener('click', ()=> navigate('#/compose'));
 
@@ -317,6 +318,7 @@ async function viewCompose(){
   // Ensure preview always follows until user explicitly renders & saves
   state.alwaysFollowUntilSave = true;
   state.followPreview = true;
+  state.varsPage = 0;
   // populate templates select
   const sel = document.getElementById('compose-template');
   sel.innerHTML = '';
@@ -325,7 +327,7 @@ async function viewCompose(){
   renderCustomFields();
   updateVars();
   livePreview();
-  sel.addEventListener('change', (e)=>{ state.currentId = e.target.value; updateVars(); livePreview(); });
+  sel.addEventListener('change', (e)=>{ state.currentId = e.target.value; state.varsPage = 0; updateVars(); livePreview(); });
   const dl = document.getElementById('download-btn'); if(dl) dl.addEventListener('click', downloadPdf);
   const rb = document.getElementById('render-btn'); if(rb) rb.addEventListener('click', renderDocument);
   const zin = document.getElementById('zoom-in');
@@ -385,7 +387,17 @@ function updateVars(){
     ta.style.height = Math.min(400, Math.max(38, ta.scrollHeight)) + 'px';
   };
 
-  vars.forEach(v=>{
+  const PAGE_SIZE = 7;
+  const total = vars.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Clamp current page into range
+  if (!Number.isInteger(state.varsPage)) state.varsPage = 0;
+  state.varsPage = Math.max(0, Math.min(state.varsPage, totalPages - 1));
+  const start = state.varsPage * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageVars = vars.slice(start, end);
+
+  pageVars.forEach(v=>{
     const row = document.createElement('div');
     row.className = 'row placeholder-row';
     const label = document.createElement('label');
@@ -407,6 +419,55 @@ function updateVars(){
     row.appendChild(input);
     panel.appendChild(row);
   });
+
+  // Pagination controls if there are more than PAGE_SIZE placeholders
+  if (total > PAGE_SIZE) {
+    const nav = document.createElement('div');
+    nav.className = 'row';
+    nav.style.justifyContent = 'space-between';
+    nav.style.alignItems = 'center';
+    nav.style.marginTop = '6px';
+
+    const info = document.createElement('div');
+    info.className = 'hint';
+    info.textContent = `Placeholders ${start + 1}-${Math.min(end, total)} of ${total}`;
+
+    const btns = document.createElement('div');
+    btns.className = 'row';
+    btns.style.gap = '6px';
+
+    const prev = document.createElement('button');
+    prev.textContent = 'Prev';
+    prev.className = 'secondary';
+    prev.disabled = state.varsPage <= 0;
+    prev.addEventListener('click', ()=>{
+      const newPage = Math.max(0, state.varsPage - 1);
+      const firstKey = vars[newPage * PAGE_SIZE];
+      state.varsPage = newPage;
+      updateVars();
+      panel.scrollTop = 0;
+      if (firstKey) setTimeout(()=> scrollPreviewToVar(firstKey, { behavior:'smooth' }), 0);
+    });
+
+    const next = document.createElement('button');
+    next.textContent = 'Next';
+    next.className = 'secondary';
+    next.disabled = state.varsPage >= (totalPages - 1);
+    next.addEventListener('click', ()=>{
+      const newPage = Math.min(totalPages - 1, state.varsPage + 1);
+      const firstKey = vars[newPage * PAGE_SIZE];
+      state.varsPage = newPage;
+      updateVars();
+      panel.scrollTop = 0;
+      if (firstKey) setTimeout(()=> scrollPreviewToVar(firstKey, { behavior:'smooth' }), 0);
+    });
+
+    btns.appendChild(prev);
+    btns.appendChild(next);
+    nav.appendChild(info);
+    nav.appendChild(btns);
+    panel.appendChild(nav);
+  }
   const btn = $('#render-btn'); if(btn) btn.disabled = !state.user || state.user.role==='viewer' || !content;
   const dBtn = document.getElementById('download-btn'); if(dBtn) dBtn.disabled = !content;
   livePreview();
