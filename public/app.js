@@ -20,7 +20,24 @@ else if (desktopMQ.addListener) desktopMQ.addListener(applyResponsiveNav);
 
 /* API base for split hosting */
 const rawApiBase = window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '');
-const API_BASE = rawApiBase.replace(/\/$/, '').replace(/\/api$/, '');
+const API_BASE = rawApiBase.replace(/\/$/, '');
+const API_BASE_HAS_API_SEGMENT = (() => {
+  if (!API_BASE) return false;
+  try {
+    const url = new URL(API_BASE, window.location.origin);
+    return /\/api(?:\/|$)/.test(url.pathname);
+  } catch (e) {
+    return /\/api(?:\/|$)/.test(API_BASE);
+  }
+})();
+const apiUrl = (path = '') => {
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  if (!API_BASE) return suffix;
+  if (API_BASE_HAS_API_SEGMENT && suffix.startsWith('/api')) {
+    return API_BASE + suffix.replace(/^\/api/, '');
+  }
+  return API_BASE + suffix;
+};
 const TOKEN_KEY = 'hrms_token';
 const getToken = ()=>{ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } };
 const setToken = (v)=>{ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} };
@@ -29,7 +46,7 @@ const authHeaders = (extra={})=>{ const t=getToken(); return { ...(extra||{}), .
 /* ========= API ========= */
 const api = {
   async me(){
-    const r = await fetch(API_BASE + '/api/me', {
+    const r = await fetch(apiUrl('/api/me'), {
       credentials: API_BASE ? 'include' : 'same-origin',
       headers: authHeaders()
     });
@@ -37,7 +54,7 @@ const api = {
     return r.json();
   },
   async login(username, password){
-    const r = await fetch(API_BASE + '/api/auth/login', {
+    const r = await fetch(apiUrl('/api/auth/login'), {
       method:'POST',
       headers: authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin',
@@ -50,7 +67,7 @@ const api = {
   },
   async logout(){
     try {
-      await fetch(API_BASE + '/api/auth/logout', {
+      await fetch(apiUrl('/api/auth/logout'), {
         method:'POST',
         headers: authHeaders(),
         credentials: API_BASE ? 'include' : 'same-origin'
@@ -60,12 +77,12 @@ const api = {
     }
   },
   async listTemplates(){
-    const r = await fetch(API_BASE + '/api/templates', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    const r = await fetch(apiUrl('/api/templates'), { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
     if (!r.ok) return { items: [] };
     return (await r.json()).items || [];
   },
   async createTemplate(t){
-    const r = await fetch(API_BASE + '/api/templates', {
+    const r = await fetch(apiUrl('/api/templates'), {
       method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
     });
@@ -73,7 +90,7 @@ const api = {
     return (await r.json()).item;
   },
   async updateTemplate(id, t){
-    const r = await fetch(API_BASE + `/api/templates/${id}`, {
+    const r = await fetch(apiUrl(`/api/templates/${id}`), {
       method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
     });
@@ -81,18 +98,18 @@ const api = {
     return (await r.json()).item;
   },
   async deleteTemplate(id){
-    const r = await fetch(API_BASE + `/api/templates/${id}`, {
+    const r = await fetch(apiUrl(`/api/templates/${id}`), {
       method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
     });
     if(!r.ok) throw new Error('Delete failed');
   },
   async listDocs(){
-    const r = await fetch(API_BASE + '/api/documents', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    const r = await fetch(apiUrl('/api/documents'), { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
     if (!r.ok) return { items: [] };
     return (await r.json()).items || [];
   },
   async render(body){
-    const r = await fetch(API_BASE + '/api/documents', {
+    const r = await fetch(apiUrl('/api/documents'), {
       method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
     });
@@ -102,12 +119,12 @@ const api = {
 
   // Admin
   async listUsers(){
-    const r = await fetch(API_BASE + '/api/auth/users',{ headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    const r = await fetch(apiUrl('/api/auth/users'), { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
     if(!r.ok) throw new Error((await r.json()).error || 'List users failed');
     return (await r.json()).users || [];
   },
   async createUser(body){
-    const r = await fetch(API_BASE + '/api/auth/users', {
+    const r = await fetch(apiUrl('/api/auth/users'), {
       method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
     });
@@ -115,7 +132,7 @@ const api = {
     return (await r.json()).user;
   },
   async updateUser(id, body){
-    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
+    const r = await fetch(apiUrl(`/api/auth/users/${id}`), {
       method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
       credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
     });
@@ -123,7 +140,7 @@ const api = {
     return (await r.json()).user;
   },
   async deleteUser(id){
-    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
+    const r = await fetch(apiUrl(`/api/auth/users/${id}`), {
       method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
     });
     if(!r.ok) throw new Error('Delete user failed');
@@ -613,7 +630,7 @@ async function downloadPdf(){
   name = name.trim() || suggested;
   if(!name.toLowerCase().endsWith('.pdf')) name += '.pdf';
   try{
-    const r = await fetch(API_BASE + '/api/documents/pdf', {
+    const r = await fetch(apiUrl('/api/documents/pdf'), {
       method:'POST',
       headers:{ 'Content-Type':'application/json', ...authHeaders() },
       credentials: API_BASE ? 'include' : 'same-origin',
@@ -634,7 +651,7 @@ async function downloadPdf(){
 async function onUploadTemplate(e){
   const f = e.target.files && e.target.files[0]; if(!f) return;
   const fd = new FormData(); fd.append('file', f);
-  const r = await fetch(API_BASE + '/api/templates/import',{ method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() });
+  const r = await fetch(apiUrl('/api/templates/import'), { method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() });
   if(!r.ok){ alert('Import failed'); return; }
   const { name, content, defaults } = await r.json();
   document.getElementById('template-name').value = name || 'Imported Template';
