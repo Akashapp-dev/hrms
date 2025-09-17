@@ -1,6 +1,4 @@
 <!doctype html>
-<link rel="stylesheet" href="/dist/styles.css">
-<script type="module" src="/dist/app.js"></script>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -9,48 +7,64 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HRMS</title>
-    <!-- Optional: point assets to a CDN or external host -->
+
+    <!-- If your API is hosted elsewhere, set it here (e.g. https://api.example.com) -->
+    <meta name="api-base" content="" />
+
+    <!-- Optional: point static assets (images) to a CDN or external host.
+         If you leave this empty, files will be served from /assets/... in dist/. -->
     <meta name="asset-base" content="" />
+
     <script>
-      (function(){
-        try{
+      (function () {
+        try {
+          // If you host images elsewhere, we’ll preconnect and set the bg img CSS var.
           var meta = document.querySelector('meta[name="asset-base"]');
-          var base = meta && (meta.getAttribute('content')||'').trim();
-          if(!base) return;
-          // Normalize and preconnect to the asset origin
+          var base = meta && (meta.getAttribute('content') || '').trim();
+          if (!base) return;
           base = base.replace(/\/$/, '');
           var u = new URL(base, location.href);
+
           var link = document.createElement('link');
           link.rel = 'preconnect';
           link.href = u.origin;
           document.head.appendChild(link);
-          // Override CSS var before stylesheet loads so only remote image is fetched
-          document.documentElement.style.setProperty('--login-bg-img', 'url(' + base + 'gs://flutter-chat-d0126.appspot.com/Leisterassets/ltcorp-polygon.png)');
-        }catch(e){ /* noop */ }
+
+          // Expect the background in /assets/images/ltcorp-polygon.png at that base
+          document.documentElement.style.setProperty(
+            '--login-bg-img',
+            'url(' + base + '/assets/images/ltcorp-polygon.png)'
+          );
+        } catch (e) {}
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=local" />
-    <!-- Safety override to ensure header stays fixed across all pages -->
+
+    <!-- Final, built CSS (this file will live in dist/) -->
+    <link rel="stylesheet" href="styles.css" />
+
+    <!-- Safety override to ensure header stays fixed -->
     <style>
       :root { --topbar-h: 48px; }
       body { padding-top: var(--topbar-h); }
-      header.topbar { position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); z-index: 10010; background: var(--card); }
+      header.topbar {
+        position: fixed; top: 0; left: 0; right: 0;
+        height: var(--topbar-h); z-index: 10010; background: var(--card);
+      }
     </style>
   </head>
-  <body>
-
+  <body class="guest">
     <!-- ================= Login Page (overlay) ================= -->
+    <!-- Start hidden; app.js will show it when unauthenticated -->
     <div id="login" class="login-page" style="display:none">
       <div class="login-layout">
         <!-- Left: LEISTER logo -->
         <div class="login-left">
-          <!-- use <img> (crisp scaling) -->
           <img
-  src="assets/images/leister-logo.png"
-  alt="Leister"
-  class="login-logo-img"
-  loading="eager"
-/>
+            src="assets/images/leister-logo.png"
+            alt="Leister"
+            class="login-logo-img"
+            loading="eager"
+          />
         </div>
 
         <!-- Right: Login card -->
@@ -76,6 +90,7 @@
       </div>
     </div>
 
+    <!-- ================= App Layout ================= -->
     <header class="topbar">
       <button id="burger" class="burger hidden" aria-label="Menu">☰</button>
       <h1>HRMS</h1>
@@ -94,6 +109,7 @@
 
     <main id="app" class="page container"></main>
 
+    <!-- Final, built JS (this file will live in dist/) -->
     <script src="app.js" type="module"></script>
   </body>
 </html>

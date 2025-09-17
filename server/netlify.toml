@@ -1,3 +1,8 @@
 [build]
-  command = "npm --prefix server ci && npm --prefix server run build"
-  publish = "public/dist"
+# run the build *inside* the server folder
+command = "cd server && npm ci && npm run build"
+# publish the whole public folder (it contains index.html and /dist assets)
+publish = "public"
+
+[build.environment]
+NODE_VERSION = "20"

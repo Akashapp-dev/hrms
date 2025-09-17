@@ -1,14 +1,11 @@
 {
   "name": "hrms-template-app",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "build": "esbuild ../public/app.js --bundle --minify --format=esm --outfile=../public/dist/app.js && esbuild ../public/styles.css --minify --outfile=../public/dist/styles.css && node ./scripts/minify-html.js"
   },
   "devDependencies": {
-    "esbuild": "^0.23.1"
-  },
-  "dependencies": {
-    "express": "^5.1.0",
-    "js": "^0.1.0"
+    "esbuild": "0.23.1"
   }
 }

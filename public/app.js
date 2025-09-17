@@ -1,55 +1,135 @@
+/* ========= utilities ========= */
 const $ = (sel) => document.querySelector(sel);
 const app = $('#app');
-// Responsive breakpoint watcher (avoids heavy resize handling)
+
+/* Responsive drawer */
 const desktopMQ = window.matchMedia('(min-width: 900px)');
 function applyResponsiveNav(){
   if(!state.user) return;
   const drawer = document.getElementById('drawer');
   if(!drawer) return;
   if(desktopMQ.matches){
-    // Desktop: drawer docked
     drawer.classList.remove('hidden');
   } else {
-    // Mobile: drawer hidden until burger opens it
     drawer.classList.add('hidden');
     document.body.classList.remove('nav-open');
   }
 }
 if (desktopMQ.addEventListener) desktopMQ.addEventListener('change', applyResponsiveNav);
 else if (desktopMQ.addListener) desktopMQ.addListener(applyResponsiveNav);
-// API base for split hosting (GitHub Pages + hosted API)
+
+/* API base for split hosting */
 const API_BASE = (window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '')).replace(/\/$/, '');
 const TOKEN_KEY = 'hrms_token';
-function getToken(){ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } }
-function setToken(v){ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} }
-function authHeaders(extra={}){ const t=getToken(); return { ...(extra||{}), ...(t ? { Authorization: 'Bearer '+t } : {}) }; }
+const getToken = ()=>{ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } };
+const setToken = (v)=>{ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} };
+const authHeaders = (extra={})=>{ const t=getToken(); return { ...(extra||{}), ...(t ? { Authorization: 'Bearer '+t } : {}) }; };
 
-// -------- API --------
+/* ========= API ========= */
 const api = {
-  async me() { const r = await fetch(API_BASE + '/api/me', { credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() }); return r.json(); },
+  async me(){
+    const r = await fetch(API_BASE + '/api/me', {
+      credentials: API_BASE ? 'include' : 'same-origin',
+      headers: authHeaders()
+    });
+    if (!r.ok) return { user: null };
+    return r.json();
+  },
   async login(username, password){
-    const r = await fetch(API_BASE + '/api/auth/login',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify({username,password})});
-    if(!r.ok) throw new Error((await r.json()).error||'Login failed');
+    const r = await fetch(API_BASE + '/api/auth/login', {
+      method:'POST',
+      headers: authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin',
+      body: JSON.stringify({ username, password })
+    });
+    if(!r.ok) throw new Error((await r.json()).error || 'Login failed');
     const data = await r.json();
     setToken(data.token);
     return data;
   },
-  async logout(){ await fetch(API_BASE + '/api/auth/logout',{method:'POST',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); setToken(''); },
-  async listTemplates(){ const r=await fetch(API_BASE + '/api/templates',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
-  async createTemplate(t){ const r=await fetch(API_BASE + '/api/templates',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Create failed'); return (await r.json()).item; },
-  async updateTemplate(id,t){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(t)}); if(!r.ok) throw new Error('Update failed'); return (await r.json()).item; },
-  async deleteTemplate(id){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'DELETE',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete failed'); },
-  async listDocs(){ const r=await fetch(API_BASE + '/api/documents',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); return (await r.json()).items; },
-  async render(body){ const r=await fetch(API_BASE + '/api/documents',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error('Render failed'); return (await r.json()).item; },
-  // Admin
-  async listUsers(){ const r = await fetch(API_BASE + '/api/auth/users',{headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error((await r.json()).error||'List users failed'); return (await r.json()).users; },
-  async createUser(body){ const r = await fetch(API_BASE + '/api/auth/users',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Create user failed'); return (await r.json()).user; },
-  async updateUser(id, body){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials: API_BASE ? 'include' : 'same-origin',body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).error||'Update user failed'); return (await r.json()).user; },
-  async deleteUser(id){ const r = await fetch(API_BASE + `/api/auth/users/${id}`,{method:'DELETE',headers:authHeaders(),credentials: API_BASE ? 'include' : 'same-origin'}); if(!r.ok) throw new Error('Delete user failed'); }
-};
-// (reserved) PDF helper can be added here if needed
+  async logout(){
+    try {
+      await fetch(API_BASE + '/api/auth/logout', {
+        method:'POST',
+        headers: authHeaders(),
+        credentials: API_BASE ? 'include' : 'same-origin'
+      });
+    } finally {
+      setToken('');
+    }
+  },
+  async listTemplates(){
+    const r = await fetch(API_BASE + '/api/templates', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    if (!r.ok) return { items: [] };
+    return (await r.json()).items || [];
+  },
+  async createTemplate(t){
+    const r = await fetch(API_BASE + '/api/templates', {
+      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
+    });
+    if(!r.ok) throw new Error('Create failed');
+    return (await r.json()).item;
+  },
+  async updateTemplate(id, t){
+    const r = await fetch(API_BASE + `/api/templates/${id}`, {
+      method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
+    });
+    if(!r.ok) throw new Error('Update failed');
+    return (await r.json()).item;
+  },
+  async deleteTemplate(id){
+    const r = await fetch(API_BASE + `/api/templates/${id}`, {
+      method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
+    });
+    if(!r.ok) throw new Error('Delete failed');
+  },
+  async listDocs(){
+    const r = await fetch(API_BASE + '/api/documents', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    if (!r.ok) return { items: [] };
+    return (await r.json()).items || [];
+  },
+  async render(body){
+    const r = await fetch(API_BASE + '/api/documents', {
+      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error('Render failed');
+    return (await r.json()).item;
+  },
 
-// -------- State --------
+  // Admin
+  async listUsers(){
+    const r = await fetch(API_BASE + '/api/auth/users',{ headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
+    if(!r.ok) throw new Error((await r.json()).error || 'List users failed');
+    return (await r.json()).users || [];
+  },
+  async createUser(body){
+    const r = await fetch(API_BASE + '/api/auth/users', {
+      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error((await r.json()).error || 'Create user failed');
+    return (await r.json()).user;
+  },
+  async updateUser(id, body){
+    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
+      method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
+      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error((await r.json()).error || 'Update user failed');
+    return (await r.json()).user;
+  },
+  async deleteUser(id){
+    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
+      method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
+    });
+    if(!r.ok) throw new Error('Delete user failed');
+  }
+};
+
+/* ========= state ========= */
 let state = {
   user: null,
   authReady: false,
@@ -78,7 +158,6 @@ function setUser(user){
   document.querySelectorAll('.admin-only').forEach(el=>{
     el.classList.toggle('hidden', !(user && user.role==='admin'));
   });
-  // Hide Compose for viewers (Templates remain visible read-only)
   const navCmp = document.querySelector('nav a[href="#/compose"]');
   const isViewer = !!user && user.role === 'viewer';
   if(navCmp) navCmp.classList.toggle('hidden', isViewer);
@@ -87,29 +166,25 @@ function setUser(user){
     drawer.classList.add('hidden');
     document.body.classList.remove('nav-open');
   } else {
-    // Let media query decide; ensure initial state applied once
     applyResponsiveNav();
   }
 }
 
-/* ---------- Overlay login helpers + bindings ---------- */
+/* ---------- Login overlay helpers ---------- */
 function showLoginOverlay(){ const o = document.getElementById('login'); if(o) o.style.display = 'grid'; }
 function hideLoginOverlay(){ const o = document.getElementById('login'); if(o) o.style.display = 'none'; }
 function bindOverlayLogin(){
   const form = document.getElementById('overlay-login-form');
   if(!form) return;
-
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const username = document.getElementById('ov-username').value.trim();
     const password = document.getElementById('ov-password').value;
     if(!username || !password) return;
-
     try{
       const res = await api.login(username, password);
       setUser(res.user);
       await bootstrapData();
-      // hide overlay and go home
       hideLoginOverlay();
       navigate('#/home');
     }catch(err){
@@ -118,7 +193,7 @@ function bindOverlayLogin(){
   });
 }
 
-// -------- Router --------
+/* ---------- Router ---------- */
 const routes = [];
 function addRoute(path, render, options={}){ routes.push({ path, render, auth: !!options.auth, roles: options.roles||null, title: options.title||'' }); }
 function navigate(path){ location.hash = path; }
@@ -130,15 +205,10 @@ window.addEventListener('hashchange', handleRoute);
 async function handleRoute(){
   const path = location.hash || '#/login';
   const route = routes.find(r => r.path === path) || routes.find(r => r.path === '#/not-found');
-  // If auth status not determined yet, avoid guarding
-  if(route?.auth && !state.authReady){
-    return; // wait for init() to complete auth check
-  }
-  // auth + role guards (only after authReady)
+  if(route?.auth && !state.authReady){ return; }
   if(route?.auth && !state.user){
-    // Do not change the hash; just show login overlay
     showLoginOverlay();
-    return; // leave current view empty/unchanged until login
+    return;
   }
   if(route?.roles && state.user && !route.roles.includes(state.user.role)){
     return redirectTo('#/home');
@@ -147,32 +217,26 @@ async function handleRoute(){
   await route.render();
 }
 
-// -------- Views --------
-function viewLogin(){
-  // Overlay login is used; keep route but render nothing to avoid duplicate forms.
-  app.innerHTML = '';
-}
+/* ---------- Views ---------- */
+function viewLogin(){ app.innerHTML = ''; }
 
 function extractVars(tpl){
-  const set = new Set(); const re = /{{\s*([a-zA-Z0-9_.]+)\s*}}/g; let m; while((m=re.exec(tpl))) set.add(m[1]); return [...set];
+  const set = new Set(); const re = /{{\s*([a-zA-Z0-9_.]+)\s*}}/g; let m;
+  while((m=re.exec(tpl))) set.add(m[1]);
+  return [...set];
 }
-function simpleRender(tpl, data){ return tpl.replace(/{{\s*([a-zA-Z0-9_.]+)\s*}}/g,(_,k)=> data[k] ?? ''); }
-// Render preview with invisible anchors after each placeholder for auto-scroll
 function renderPreviewWithAnchors(tpl, data){
   return tpl.replace(/{{\s*([a-zA-Z0-9_.]+)\s*}}/g, (_, k)=>{
     const val = data[k] ?? '';
-    // Add an invisible anchor after the inserted value to locate it in preview
-    return String(val) + `<span class=\"ph-anchor\" data-ph=\"${k}\"></span>`;
+    return String(val) + `<span class="ph-anchor" data-ph="${k}"></span>`;
   });
 }
-
 function scrollPreviewToVar(key, opts={}){
   const scroller = document.querySelector('.preview-scroll');
   const target = document.querySelector(`#preview .ph-anchor[data-ph="${key}"]`);
   if(!scroller || !target) return;
   const isLast = Array.isArray(state.varsOrder) && state.varsOrder[state.varsOrder.length-1] === key;
   const block = opts.block || (isLast ? 'end' : 'center');
-  // If last placeholder, ensure we reach the very bottom of the preview
   if(isLast){
     try{ scroller.scrollTo({ top: scroller.scrollHeight, behavior: opts.behavior || 'auto' }); }
     catch{ scroller.scrollTop = scroller.scrollHeight; }
@@ -186,22 +250,20 @@ function scrollPreviewToVar(key, opts={}){
     scroller.scrollTop += delta;
   }
 }
-
 function isAnchorVisible(key){
   const scroller = document.querySelector('.preview-scroll');
   const target = document.querySelector(`#preview .ph-anchor[data-ph="${key}"]`);
   if(!scroller || !target) return false;
   const sr = scroller.getBoundingClientRect();
   const tr = target.getBoundingClientRect();
-  const m = 24; // margin
+  const m = 24;
   return tr.top >= sr.top + m && tr.bottom <= sr.bottom - m;
 }
-
 function initPreviewFollow(){
   const scroller = document.querySelector('.preview-scroll');
   if(!scroller) return;
   const onUserScroll = ()=>{
-    if(state.alwaysFollowUntilSave) return; // keep following until Render & Save
+    if(state.alwaysFollowUntilSave) return;
     state.followPreview = false;
     if(state._followTimer) clearTimeout(state._followTimer);
     state._followTimer = setTimeout(()=>{ state.followPreview = true; }, 900);
@@ -212,7 +274,6 @@ function initPreviewFollow(){
 }
 
 async function viewTemplates(){
-  // Templates management only
   const tpl = `
   <div class="templates-grid">
     <section class="list-panel">
@@ -252,17 +313,18 @@ async function viewTemplates(){
   </div>`;
   app.innerHTML = tpl;
   renderTemplates();
-  // events
-  $('#new-template-btn').addEventListener('click', ()=>{ state.currentId=null; $('#template-name').value=''; $('#template-desc').value=''; $('#template-content').value=''; updateVars(); $('#save-template-btn').disabled=false; });
+  $('#new-template-btn').addEventListener('click', ()=>{
+    state.currentId=null; $('#template-name').value=''; $('#template-desc').value=''; $('#template-content').value=''; updateVars(); $('#save-template-btn').disabled=false;
+  });
   $('#save-template-btn').addEventListener('click', saveTemplate);
   $('#delete-template-btn').addEventListener('click', deleteTemplate);
   $('#upload-btn').addEventListener('click', ()=> document.getElementById('upload-input').click());
   document.getElementById('upload-input').addEventListener('change', onUploadTemplate);
   $('#template-list').addEventListener('change', (e)=>{ state.currentId=e.target.value; state.varsPage = 0; renderTemplates(); });
   $('#template-content').addEventListener('input', updateVars);
+
   $('#go-compose').addEventListener('click', ()=> navigate('#/compose'));
 
-  // Role-based UI: viewers can only view
   if (state.user?.role === 'viewer') {
     ['new-template-btn','upload-btn','save-template-btn','delete-template-btn'].forEach(id=>{
       const el = document.getElementById(id); if (el) el.disabled = true;
@@ -275,7 +337,6 @@ async function viewTemplates(){
   }
 }
 
-// Compose view: select template, enter data, live preview + download
 async function viewCompose(){
   const tpl = `
   <section>
@@ -315,34 +376,31 @@ async function viewCompose(){
     </div>
   </section>`;
   app.innerHTML = tpl;
-  // Ensure preview always follows until user explicitly renders & saves
+
   state.alwaysFollowUntilSave = true;
   state.followPreview = true;
   state.varsPage = 0;
-  // populate templates select
+
   const sel = document.getElementById('compose-template');
   sel.innerHTML = '';
   state.templates.forEach(t=>{ const opt=document.createElement('option'); opt.value=t.id; opt.textContent=t.name; if(t.id===state.currentId) opt.selected=true; sel.appendChild(opt); });
   if(!state.currentId && state.templates[0]) state.currentId = state.templates[0].id;
+
   renderCustomFields();
   updateVars();
   livePreview();
+
   sel.addEventListener('change', (e)=>{ state.currentId = e.target.value; state.varsPage = 0; updateVars(); livePreview(); });
   const dl = document.getElementById('download-btn'); if(dl) dl.addEventListener('click', downloadPdf);
   const rb = document.getElementById('render-btn'); if(rb) rb.addEventListener('click', renderDocument);
+
   const zin = document.getElementById('zoom-in');
   const zout = document.getElementById('zoom-out');
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   const getZoom = ()=> parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--preview-zoom')||'1') || 1;
-  if(zin) zin.addEventListener('click', ()=>{
-    const z = clamp(getZoom() + 0.05, 0.7, 1.5);
-    document.documentElement.style.setProperty('--preview-zoom', z);
-  });
-  if(zout) zout.addEventListener('click', ()=>{
-    const z = clamp(getZoom() - 0.05, 0.7, 1.5);
-    document.documentElement.style.setProperty('--preview-zoom', z);
-  });
-  // Bind preview follow controls to detect manual scrolls
+  if(zin) zin.addEventListener('click', ()=>{ const z = clamp(getZoom() + 0.05, 0.7, 1.5); document.documentElement.style.setProperty('--preview-zoom', z); });
+  if(zout) zout.addEventListener('click', ()=>{ const z = clamp(getZoom() - 0.05, 0.7, 1.5); document.documentElement.style.setProperty('--preview-zoom', z); });
+
   initPreviewFollow();
 }
 
@@ -367,7 +425,6 @@ function getActiveContent(){
 }
 function updateVars(){
   const content = getActiveContent();
-  // Keep placeholders in the order they appear in the template
   const vars = extractVars(content).slice();
   state.varsOrder = vars.slice();
   const panel = $('#vars'); if(!panel) return; panel.innerHTML='';
@@ -390,7 +447,6 @@ function updateVars(){
   const PAGE_SIZE = 7;
   const total = vars.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  // Clamp current page into range
   if (!Number.isInteger(state.varsPage)) state.varsPage = 0;
   state.varsPage = Math.max(0, Math.min(state.varsPage, totalPages - 1));
   const start = state.varsPage * PAGE_SIZE;
@@ -420,7 +476,6 @@ function updateVars(){
     panel.appendChild(row);
   });
 
-  // Pagination controls if there are more than PAGE_SIZE placeholders
   if (total > PAGE_SIZE) {
     const nav = document.createElement('div');
     nav.className = 'row';
@@ -517,25 +572,35 @@ function renderCustomFields(){
 async function saveTemplate(){
   const t = { name: $('#template-name').value, description: $('#template-desc').value, content: $('#template-content').value };
   if(!t.name || !t.content) return alert('Name and content required');
-  if(state.currentId){ const updated = await api.updateTemplate(state.currentId,t); const idx=state.templates.findIndex(x=>x.id===state.currentId); state.templates[idx]=updated; }
-  else { const created = await api.createTemplate(t); state.templates.push(created); state.currentId=created.id; }
+  if(state.currentId){
+    const updated = await api.updateTemplate(state.currentId,t);
+    const idx=state.templates.findIndex(x=>x.id===state.currentId); state.templates[idx]=updated;
+  } else {
+    const created = await api.createTemplate(t);
+    state.templates.push(created); state.currentId=created.id;
+  }
   renderTemplates();
 }
-async function deleteTemplate(){ if(!state.currentId) return; if(!confirm('Delete template?')) return; await api.deleteTemplate(state.currentId); state.templates=state.templates.filter(x=>x.id!==state.currentId); state.currentId=null; renderTemplates(); }
+async function deleteTemplate(){
+  if(!state.currentId) return;
+  if(!confirm('Delete template?')) return;
+  await api.deleteTemplate(state.currentId);
+  state.templates=state.templates.filter(x=>x.id!==state.currentId);
+  state.currentId=null;
+  renderTemplates();
+}
 async function renderDocument(){
   const t = getActiveContent();
   if(!t) return alert('No template content');
   try{
     const doc = await api.render({ content:t, data:state.data });
     state.docs.push(doc);
-    // Stop forced follow after saving, so user can freely inspect
     state.alwaysFollowUntilSave = false;
     alert('Document saved. See Letters page to download.');
   }catch(e){
     alert('Render failed');
   }
 }
-
 async function downloadPdf(){
   const content = getActiveContent();
   if(!content) return alert('Add some content first');
@@ -543,35 +608,36 @@ async function downloadPdf(){
   const date = new Date().toISOString().slice(0,10);
   const suggested = `${(t?.name||'document')}-${date}`;
   let name = prompt('Enter PDF file name', suggested);
-  if(name==null) return; // cancelled
+  if(name==null) return;
   name = name.trim() || suggested;
   if(!name.toLowerCase().endsWith('.pdf')) name += '.pdf';
   try{
     const r = await fetch(API_BASE + '/api/documents/pdf', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      headers:{ 'Content-Type':'application/json', ...authHeaders() },
       credentials: API_BASE ? 'include' : 'same-origin',
       body: JSON.stringify({ content, data: state.data, templateId: state.currentId || null, fileName: name })
     });
-    if(!r.ok){ try{ const j=await r.json(); alert(j.error||'Failed to generate PDF'); }catch{ alert('Failed to generate PDF'); } return; }
+    if(!r.ok){
+      try{ const j=await r.json(); alert(j.error||'Failed to generate PDF'); }
+      catch{ alert('Failed to generate PDF'); }
+      return;
+    }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    // refresh docs list so Letters shows the saved PDF name
     try { state.docs = await api.listDocs(); } catch {}
   }catch(e){ alert(e.message); }
 }
-
 async function onUploadTemplate(e){
   const f = e.target.files && e.target.files[0]; if(!f) return;
   const fd = new FormData(); fd.append('file', f);
-  const r = await fetch(API_BASE + '/api/templates/import',{ method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin' });
+  const r = await fetch(API_BASE + '/api/templates/import',{ method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() });
   if(!r.ok){ alert('Import failed'); return; }
-  const { name, content, vars, defaults } = await r.json();
+  const { name, content, defaults } = await r.json();
   document.getElementById('template-name').value = name || 'Imported Template';
   document.getElementById('template-content').value = content || '';
-  // seed defaults into state.data
   state.data = { ...defaults };
   updateVars();
 }
@@ -644,7 +710,7 @@ function renderDocs(){
   });
 }
 
-// Home view
+/* ---------- Home & Admin ---------- */
 async function viewHome(){
   const count = state.templates.length;
   const isAdmin = state.user?.role === 'admin';
@@ -663,7 +729,7 @@ async function viewHome(){
     <div class="tile-grid" style="margin-top:8px">
       <div class="tile" id="tile-templates">
         <h3 style="margin-top:0">Templates</h3>
-        <p style="color:var(--muted)">${count} available</p>
+        <p style="color:var(--muted)}">${count} available</p>
         <div class="row" style="gap:8px"><button id="go-templates" class="secondary">Manage</button><button id="qc-create" class="success">Quick Create</button></div>
         <div class="row" style="gap:6px;margin-top:6px"><input id="qc-name" placeholder="Template name" /></div>
       </div>
@@ -683,7 +749,6 @@ async function viewHome(){
     const created = await api.createTemplate({ name, description:'', content:'Hello {{name}}' });
     state.templates.push(created); state.currentId = created.id; navigate('#/templates');
   };
-  // For viewers, disable Quick Create (still allow Manage to view Templates)
   if(state.user?.role === 'viewer'){
     const qcBtn = document.getElementById('qc-create');
     const qcName = document.getElementById('qc-name');
@@ -701,11 +766,9 @@ async function viewHome(){
         if(!username || !password) return alert('Username and password required');
         try{
           const created = await api.createUser({ username, name, role, password });
-          // Refresh users cache so Admin > Users lists the new account
           try { state.users = await api.listUsers(); } catch {}
           state.selectedUserId = created?.id || null;
           alert('User created');
-          // Clear quick-add inputs
           document.getElementById('qu-username').value = '';
           document.getElementById('qu-name').value = '';
           document.getElementById('qu-pass').value = '';
@@ -715,7 +778,6 @@ async function viewHome(){
   }
 }
 
-// Profile view
 async function viewProfile(){
   const u = state.user || {};
   const initial = (u.name || u.username || '?').toString().charAt(0).toUpperCase();
@@ -815,7 +877,6 @@ function renderUserDetail(){
       if(!username || !password) return alert('Username and password required');
       try{
         const created = await api.createUser({ username, name, role, password });
-        // Update local cache and select the new user
         try { state.users = await api.listUsers(); } catch { state.users.push(created); }
         state.selectedUserId = created?.id || null;
         state.creatingUser = false;
@@ -823,7 +884,11 @@ function renderUserDetail(){
         alert('User created');
       }catch(e){ alert(e.message); }
     };
-    if(cancelBtn) cancelBtn.onclick = ()=>{ state.creatingUser = false; if(!state.selectedUserId && state.users[0]) state.selectedUserId = state.users[0].id; renderUserList(); renderUserDetail(); };
+    if(cancelBtn) cancelBtn.onclick = ()=>{
+      state.creatingUser = false;
+      if(!state.selectedUserId && state.users[0]) state.selectedUserId = state.users[0].id;
+      renderUserList(); renderUserDetail();
+    };
     return;
   }
   const u = state.users.find(x=>x.id===state.selectedUserId);
@@ -883,7 +948,7 @@ function renderUserDetail(){
   };
 }
 
-// Register routes
+/* ---------- Routes ---------- */
 addRoute('#/login', viewLogin, { title:'Login' });
 addRoute('#/home', async ()=>{ await viewHome(); }, { auth:true, title:'Home' });
 addRoute('#/templates', viewTemplates, { auth:true, title:'Templates' });
@@ -893,7 +958,7 @@ addRoute('#/profile', async ()=>{ await viewProfile(); }, { auth:true, title:'Pr
 addRoute('#/admin/users', viewAdminUsers, { auth:true, roles:['admin'], title:'Users' });
 addRoute('#/not-found', async()=>{ app.innerHTML='<section><h2>Not found</h2></section>'; });
 
-// Boot
+/* ---------- Boot ---------- */
 async function bootstrapData(){
   if(!state.user) return;
   state.templates = await api.listTemplates();
@@ -904,7 +969,7 @@ $('#logout-btn').addEventListener('click', async ()=>{
   await api.logout();
   setUser(null);
   const overlay = document.getElementById('login');
-  if(overlay) overlay.style.display = 'grid'; // show login overlay again
+  if(overlay) overlay.style.display = 'grid';
   navigate('#/login');
 });
 
@@ -922,26 +987,28 @@ document.querySelectorAll('[data-route]').forEach(a=>a.addEventListener('click',
   }
 }));
 
+/* Safe init: ALWAYS show login if /api/me fails or user missing */
 (async function init(){
-  const me = await api.me();
-  setUser(me.user);
-  state.authReady = true; // mark auth check complete
+  try {
+    const me = await api.me();
+    setUser(me.user);
+  } catch (e) {
+    console.warn('API /me failed, defaulting to guest', e);
+    setUser(null);
+  }
+  state.authReady = true;
 
-  // Bind overlay form
   bindOverlayLogin();
 
-  // Hide overlay if already authed
-  if(state.user) hideLoginOverlay();
-
   if(state.user){
+    hideLoginOverlay();
     await bootstrapData();
     if(!location.hash || location.hash==='#/login') navigate('#/home');
   } else {
-    // Show overlay only when unauthenticated, keep current hash (no bounce)
     showLoginOverlay();
+    navigate('#/login');
   }
-  handleRoute();
 
-  // Initial responsive apply
+  handleRoute();
   applyResponsiveNav();
 })();

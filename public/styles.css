@@ -5,6 +5,7 @@
   --brand-green:#009257;
   --brand-gray:#40444e;
   --brand-blue:#00497b;
+
   --bg:var(--brand-white);
   --fg:var(--brand-black);
   --muted:#6b7280;
@@ -39,7 +40,7 @@
 html, body { min-height: 100%; }
 body{
   margin:0;
-  font-family:"Avenir Next World", system-ui,Segoe UI,Roboto,Ubuntu,sans-serif;
+  font-family:"Avenir Next World", system-ui, Segoe UI, Roboto, Ubuntu, sans-serif;
   background:var(--bg);
   color:var(--fg);
   font-size:14px;
