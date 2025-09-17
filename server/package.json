@@ -1,6 +1,4 @@
 {
-  "name": "hrms-template-app",
-  "private": true,
   "scripts": {
     "build": "esbuild ../public/app.js --bundle --minify --format=esm --outfile=../public/dist/app.js && esbuild ../public/styles.css --minify --outfile=../public/dist/styles.css && node ./scripts/minify-html.js"
   },
