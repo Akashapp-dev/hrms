@@ -1,0 +1,6 @@
+[build]
+  command = "npm --prefix server run build"
+  publish = "public/dist"
+
+[build.environment]
+  NODE_VERSION = "22.19.0"
