@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HRMS</title>
+    <!-- Optional: point assets to a CDN or external host -->
+    <meta name="asset-base" content="" />
+    <script>
+      (function(){
+        try{
+          var meta = document.querySelector('meta[name="asset-base"]');
+          var base = meta && (meta.getAttribute('content')||'').trim();
+          if(!base) return;
+          // Normalize and preconnect to the asset origin
+          base = base.replace(/\/$/, '');
+          var u = new URL(base, location.href);
+          var link = document.createElement('link');
+          link.rel = 'preconnect';
+          link.href = u.origin;
+          document.head.appendChild(link);
+          // Override CSS var before stylesheet loads so only remote image is fetched
+          document.documentElement.style.setProperty('--login-bg-img', 'url(' + base + 'gs://flutter-chat-d0126.appspot.com/Leisterassets/ltcorp-polygon.png)');
+        }catch(e){ /* noop */ }
+      })();
+    </script>
+    <link rel="stylesheet" href="styles.css?v=local" />
+    <!-- Safety override to ensure header stays fixed across all pages -->
+    <style>
+      :root { --topbar-h: 48px; }
+      body { padding-top: var(--topbar-h); }
+      header.topbar { position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); z-index: 10010; background: var(--card); }
+    </style>
+  </head>
+  <body>
+
+    <!-- ================= Login Page (overlay) ================= -->
+    <div id="login" class="login-page" style="display:none">
+      <div class="login-layout">
+        <!-- Left: LEISTER logo -->
+        <div class="login-left">
+          <!-- use <img> (crisp scaling) -->
+          <img
+  src="assets/images/leister-logo.png"
+  alt="Leister"
+  class="login-logo-img"
+  loading="eager"
+/>
+        </div>
+
+        <!-- Right: Login card -->
+        <div class="login-right">
+          <form id="overlay-login-form" class="login-card" autocomplete="on">
+            <h1 class="title">Welcome Back!</h1>
+            <p class="subtitle">Sign in to continue to LTIN HR.</p>
+
+            <label for="ov-username">Enter User ID</label>
+            <input id="ov-username" name="username" type="text" placeholder="User ID" required />
+
+            <label for="ov-password">Enter Password</label>
+            <input id="ov-password" name="password" type="password" placeholder="Password" required />
+
+            <button class="btn" type="submit">Login</button>
+
+            <div class="links">
+              <a href="#">Forgot password?</a>
+              <a href="#">Need help?</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <button id="burger" class="burger hidden" aria-label="Menu">☰</button>
+      <h1>HRMS</h1>
+      <div id="user-info" class="userinfo"></div>
+      <button id="logout-btn" class="hidden">Logout</button>
+    </header>
+
+    <nav id="drawer" class="drawer hidden">
+      <a href="#/home" data-route>Home</a>
+      <a href="#/templates" data-route>Templates</a>
+      <a href="#/compose" data-route>Compose</a>
+      <a href="#/letters" data-route>Letters</a>
+      <a href="#/profile" data-route>Profile</a>
+      <a href="#/admin/users" data-route class="admin-only hidden">Users</a>
+    </nav>
+
+    <main id="app" class="page container"></main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
