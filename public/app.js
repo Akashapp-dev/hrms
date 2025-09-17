@@ -19,7 +19,8 @@ if (desktopMQ.addEventListener) desktopMQ.addEventListener('change', applyRespon
 else if (desktopMQ.addListener) desktopMQ.addListener(applyResponsiveNav);
 
 /* API base for split hosting */
-const API_BASE = (window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '')).replace(/\/$/, '');
+const rawApiBase = window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '');
+const API_BASE = rawApiBase.replace(/\/$/, '').replace(/\/api$/, '');
 const TOKEN_KEY = 'hrms_token';
 const getToken = ()=>{ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } };
 const setToken = (v)=>{ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} };
