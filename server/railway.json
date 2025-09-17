@@ -2,12 +2,12 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "installCommand": "npm ci",
-    "buildCommand": "npm run build"
+    "installCommand": "npm --prefix server ci",
+    "buildCommand": "npm --prefix server run build"
   },
   "deploy": {
     "runtime": "V2",
-    "startCommand": "npm start",
+    "startCommand": "npm --prefix server star",
     "numReplicas": 1
   }
 }
