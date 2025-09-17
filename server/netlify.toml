@@ -1,6 +1,3 @@
 [build]
   command = "npm --prefix server ci && npm --prefix server run build"
   publish = "public/dist"
-
-[build.environment]
-  NODE_VERSION = "18"
