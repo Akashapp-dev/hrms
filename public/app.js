@@ -26,139 +26,157 @@ let state = {
   creatingUser: false
 };
 
-/* API base for split hosting */
-const rawApiBase = window.API_BASE || (document.querySelector('meta[name="api-base"]')?.content || '');
-const API_BASE = rawApiBase.replace(/\/$/, '').replace(/\/api$/, '');
-const TOKEN_KEY = 'hrms_token';
-const getToken = ()=>{ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } };
-const setToken = (v)=>{ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} };
-const authHeaders = (extra={})=>{ const t=getToken(); return { ...(extra||{}), ...(t ? { Authorization: 'Bearer '+t } : {}) }; };
+// ---------- storage helpers ----------
+function lsGet(k, def){ try{ const v = localStorage.getItem(k); return v?JSON.parse(v):def; }catch{ return def; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+function getToken(){ try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch{ return ''; } }
+function setToken(v){ try{ if(v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); }catch{} }
 
-/* ========= API ========= */
-const api = {
+// ---------- mock database (localStorage) ----------
+const DB_KEYS = {
+  users: 'hrms_users',
+  templates: 'hrms_templates',
+  docs: 'hrms_docs'
+};
+// seed demo users on first load
+(function seedDemo(){
+  const users = lsGet(DB_KEYS.users, null);
+  if(!users){
+    lsSet(DB_KEYS.users, [
+      { id:1, username:'admin',  name:'Admin',  role:'admin',  password:'admin123', createdAt:Date.now(), updatedAt:Date.now() },
+      { id:2, username:'editor', name:'Editor', role:'editor', password:'editor123', createdAt:Date.now(), updatedAt:Date.now() },
+      { id:3, username:'viewer', name:'Viewer', role:'viewer', password:'viewer123', createdAt:Date.now(), updatedAt:Date.now() },
+    ]);
+  }
+  if(!lsGet(DB_KEYS.templates, null)){
+    const t1 = { id: 1, name: 'Welcome Letter', description:'Sample', content:'Dear {{name}},\nWelcome to the company on {{date}}.\nAddress: {{address}}' };
+    lsSet(DB_KEYS.templates, [t1]);
+  }
+  if(!lsGet(DB_KEYS.docs, null)){ lsSet(DB_KEYS.docs, []); }
+})();
+
+function nextId(arr){ return (arr.reduce((m,x)=>Math.max(m, x.id||0), 0) || 0) + 1; }
+
+// ---------- mock API (used when NO_BACKEND === true) ----------
+const mockApi = {
   async me(){
-    const r = await fetch(API_BASE + '/api/me', {
-      credentials: API_BASE ? 'include' : 'same-origin',
-      headers: authHeaders()
-    });
-    if (!r.ok) return { user: null };
-    return r.json();
+    const t = getToken();
+    if(!t) return { user: null };
+    const users = lsGet(DB_KEYS.users, []);
+    const user = users.find(u=> String(u.id) === String(t));
+    return { user: user ? { id:user.id, username:user.username, name:user.name, role:user.role, createdAt:user.createdAt, updatedAt:user.updatedAt } : null };
   },
   async login(username, password){
-    const r = await fetch(API_BASE + '/api/auth/login', {
-      method:'POST',
-      headers: authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin',
-      body: JSON.stringify({ username, password })
-    });
-    if(!r.ok) throw new Error((await r.json()).error || 'Login failed');
-    const data = await r.json();
-    setToken(data.token);
-    return data;
+    const users = lsGet(DB_KEYS.users, []);
+    const u = users.find(x=>x.username===username && x.password===password);
+    if(!u) throw new Error('Invalid credentials');
+    setToken(String(u.id));
+    return { token:String(u.id), user: { id:u.id, username:u.username, name:u.name, role:u.role, createdAt:u.createdAt, updatedAt:u.updatedAt } };
   },
-  async logout(){
-    try {
-      await fetch(API_BASE + '/api/auth/logout', {
-        method:'POST',
-        headers: authHeaders(),
-        credentials: API_BASE ? 'include' : 'same-origin'
-      });
-    } finally {
-      setToken('');
-    }
-  },
+  async logout(){ setToken(''); return { ok:true }; },
+
+  // templates
   async listTemplates(){
-    const r = await fetch(API_BASE + '/api/templates', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
-    if (!r.ok) return { items: [] };
-    return (await r.json()).items || [];
+    return lsGet(DB_KEYS.templates, []).slice();
   },
   async createTemplate(t){
-    const r = await fetch(API_BASE + '/api/templates', {
-      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
-    });
-    if(!r.ok) throw new Error('Create failed');
-    return (await r.json()).item;
+    const list = lsGet(DB_KEYS.templates, []);
+    const item = { id: nextId(list), ...t };
+    list.push(item); lsSet(DB_KEYS.templates, list);
+    return item;
   },
   async updateTemplate(id, t){
-    const r = await fetch(API_BASE + `/api/templates/${id}`, {
-      method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(t)
-    });
-    if(!r.ok) throw new Error('Update failed');
-    return (await r.json()).item;
+    const list = lsGet(DB_KEYS.templates, []);
+    const i = list.findIndex(x=> String(x.id)===String(id));
+    if(i<0) throw new Error('Not found');
+    list[i] = { ...list[i], ...t }; lsSet(DB_KEYS.templates, list);
+    return list[i];
   },
   async deleteTemplate(id){
-    const r = await fetch(API_BASE + `/api/templates/${id}`, {
-      method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
-    });
-    if(!r.ok) throw new Error('Delete failed');
+    let list = lsGet(DB_KEYS.templates, []);
+    list = list.filter(x=> String(x.id)!==String(id)); lsSet(DB_KEYS.templates, list);
+    return { ok:true };
   },
 
   // documents
   async listDocs(){
-    const r = await fetch(API_BASE + '/api/documents', { headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
-    if (!r.ok) return { items: [] };
-    return (await r.json()).items || [];
+    return lsGet(DB_KEYS.docs, []).slice();
   },
   async render(body){
-    const r = await fetch(API_BASE + '/api/documents', {
-      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
-    });
-    if(!r.ok) throw new Error('Render failed');
-    return (await r.json()).item;
+    const docs = lsGet(DB_KEYS.docs, []);
+    const item = { id: nextId(docs), content: body.content || '', data: body.data || {}, createdAt: Date.now(), fileName: null };
+    docs.push(item); lsSet(DB_KEYS.docs, docs);
+    return item;
   },
 
   // admin users
   async listUsers(){
-    const r = await fetch(API_BASE + '/api/auth/users',{ headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin' });
-    if(!r.ok) throw new Error((await r.json()).error || 'List users failed');
-    return (await r.json()).users || [];
+    const users = lsGet(DB_KEYS.users, []);
+    return users.map(u=>({ id:u.id, username:u.username, name:u.name, role:u.role, createdAt:u.createdAt, updatedAt:u.updatedAt }));
   },
   async createUser(body){
-    const r = await fetch(API_BASE + '/api/auth/users', {
-      method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
-    });
-    if(!r.ok) throw new Error((await r.json()).error || 'Create user failed');
-    return (await r.json()).user;
+    const users = lsGet(DB_KEYS.users, []);
+    if(users.some(u=>u.username===body.username)) throw new Error('Username already exists');
+    const user = { id: nextId(users), username: body.username, name: body.name||'', role: body.role||'editor', password: body.password||'changeme', createdAt: Date.now(), updatedAt: Date.now() };
+    users.push(user); lsSet(DB_KEYS.users, users);
+    return { id:user.id, username:user.username, name:user.name, role:user.role, createdAt:user.createdAt, updatedAt:user.updatedAt };
   },
   async updateUser(id, body){
-    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
-      method:'PUT', headers:authHeaders({'Content-Type':'application/json'}),
-      credentials: API_BASE ? 'include' : 'same-origin', body:JSON.stringify(body)
-    });
-    if(!r.ok) throw new Error((await r.json()).error || 'Update user failed');
-    return (await r.json()).user;
+    const users = lsGet(DB_KEYS.users, []);
+    const i = users.findIndex(u=> String(u.id)===String(id)); if(i<0) throw new Error('Not found');
+    users[i] = { ...users[i], ...body, updatedAt: Date.now() };
+    lsSet(DB_KEYS.users, users);
+    const u = users[i];
+    return { id:u.id, username:u.username, name:u.name, role:u.role, createdAt:u.createdAt, updatedAt:u.updatedAt };
   },
   async deleteUser(id){
-    const r = await fetch(API_BASE + `/api/auth/users/${id}`, {
-      method:'DELETE', headers:authHeaders(), credentials: API_BASE ? 'include' : 'same-origin'
-    });
-    if(!r.ok) throw new Error('Delete user failed');
-  }
+    let users = lsGet(DB_KEYS.users, []);
+    users = users.filter(u=> String(u.id)!==String(id)); lsSet(DB_KEYS.users, users);
+    return { ok:true };
+  },
 };
 
-/* ========= state ========= */
-let state = {
-  user: null,
-  authReady: false,
-  templates: [],
-  currentId: null,
-  data: {},
-  varsOrder: [],
-  varsPage: 0,
-  followPreview: true,
-  _followTimer: null,
-  alwaysFollowUntilSave: true,
-  docs: [],
-  docsQuery: '',
-  users: [],
-  selectedUserId: null,
-  creatingUser: false
+// ---------- real API wrapper (used if API_BASE is set) ----------
+function authHeaders(extra={}){ const t=getToken(); return { ...(extra||{}), ...(t ? { Authorization:'Bearer '+t } : {}) }; }
+const realApi = {
+  async me(){ const r = await fetch(API_BASE + '/api/me', { credentials:'include', headers:authHeaders() }); return safeJson(r); },
+  async login(username,password){ const r=await fetch(API_BASE + '/api/auth/login',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify({username,password})}); const d=await safeJson(r); if(!r.ok) throw new Error(d.error||'Login failed'); setToken(d.token); return d; },
+  async logout(){ await fetch(API_BASE + '/api/auth/logout',{method:'POST',headers:authHeaders(),credentials:'include'}); setToken(''); },
+  async listTemplates(){ const r=await fetch(API_BASE + '/api/templates',{headers:authHeaders(),credentials:'include'}); const d=await safeJson(r); return d.items||[]; },
+  async createTemplate(t){ const r=await fetch(API_BASE + '/api/templates',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify(t)}); const d=await safeJson(r); if(!r.ok) throw new Error('Create failed'); return d.item; },
+  async updateTemplate(id,t){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify(t)}); const d=await safeJson(r); if(!r.ok) throw new Error('Update failed'); return d.item; },
+  async deleteTemplate(id){ const r=await fetch(API_BASE + `/api/templates/${id}`,{method:'DELETE',headers:authHeaders(),credentials:'include'}); if(!r.ok) throw new Error('Delete failed'); },
+  async listDocs(){ const r=await fetch(API_BASE + '/api/documents',{headers:authHeaders(),credentials:'include'}); const d=await safeJson(r); return d.items||[]; },
+  async render(body){ const r=await fetch(API_BASE + '/api/documents',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify(body)}); const d=await safeJson(r); if(!r.ok) throw new Error('Render failed'); return d.item; },
+  async listUsers(){ const r=await fetch(API_BASE + '/api/auth/users',{headers:authHeaders(),credentials:'include'}); const d=await safeJson(r); if(!r.ok) throw new Error(d.error||'List users failed'); return d.users||[]; },
+  async createUser(body){ const r=await fetch(API_BASE + '/api/auth/users',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify(body)}); const d=await safeJson(r); if(!r.ok) throw new Error(d.error||'Create user failed'); return d.user; },
+  async updateUser(id, body){ const r=await fetch(API_BASE + `/api/auth/users/${id}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),credentials:'include',body:JSON.stringify(body)}); const d=await safeJson(r); if(!r.ok) throw new Error(d.error||'Update user failed'); return d.user; },
+  async deleteUser(id){ const r=await fetch(API_BASE + `/api/auth/users/${id}`,{method:'DELETE',headers:authHeaders(),credentials:'include'}); if(!r.ok) throw new Error('Delete user failed'); },
 };
+async function safeJson(res){
+  // Avoid "Unexpected end of JSON input"
+  const ct = res.headers.get('content-type')||'';
+  if(ct.includes('application/json')) return res.json();
+  const text = await res.text();
+  try{ return JSON.parse(text||'{}'); }catch{ return { ok: res.ok, status: res.status, text }; }
+}
 
+// choose api
+const api = NO_BACKEND ? mockApi : realApi;
+
+// ---------- responsive nav ----------
+const desktopMQ = window.matchMedia('(min-width: 900px)');
+function applyResponsiveNav(){
+  if(!state.user) return;
+  const drawer = document.getElementById('drawer');
+  if(!drawer) return;
+  if(desktopMQ.matches){ drawer.classList.remove('hidden'); }
+  else { drawer.classList.add('hidden'); document.body.classList.remove('nav-open'); }
+}
+if (desktopMQ.addEventListener) desktopMQ.addEventListener('change', applyResponsiveNav);
+else if (desktopMQ.addListener) desktopMQ.addListener(applyResponsiveNav);
+
+// ---------- auth / UI helpers ----------
 function setUser(user){
   state.user = user;
   $('#user-info').textContent = user ? `${user.username} (${user.role})` : '';
@@ -518,41 +536,23 @@ async function downloadDocClient(){
   const content = getActiveContent(); if(!content) return alert('Add some content first');
   const t = state.templates.find(x=>x.id==state.currentId);
   const date = new Date().toISOString().slice(0,10);
-  const suggested = `${(t?.name||'document')}-${date}`;
-  let name = prompt('Enter PDF file name', suggested);
-  if(name==null) return;
-  name = name.trim() || suggested;
-  if(!name.toLowerCase().endsWith('.pdf')) name += '.pdf';
-  try{
-    const r = await fetch(API_BASE + '/api/documents/pdf', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', ...authHeaders() },
-      credentials: API_BASE ? 'include' : 'same-origin',
-      body: JSON.stringify({ content, data: state.data, templateId: state.currentId || null, fileName: name })
-    });
-    if(!r.ok){
-      try{ const j=await r.json(); alert(j.error||'Failed to generate PDF'); }
-      catch{ alert('Failed to generate PDF'); }
-      return;
-    }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-    try { state.docs = await api.listDocs(); } catch {}
-  }catch(e){ alert(e.message); }
+  let name = prompt('Enter file name', `${(t?.name||'document')}-${date}.html`); if(name==null) return;
+  name = name.trim() || `document-${date}.html`;
+  if(!/\.(html?|txt)$/i.test(name)) name += '.html';
+  const html = `<!doctype html><meta charset="utf-8"><title>${name}</title><pre style="white-space:pre-wrap;font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial">${renderText(content, state.data)}</pre>`;
+  const blob = new Blob([html], { type: name.endsWith('.txt')?'text/plain':'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // upload/import basic
 async function onUploadTemplate(e){
   const f = e.target.files && e.target.files[0]; if(!f) return;
-  const fd = new FormData(); fd.append('file', f);
-  const r = await fetch(API_BASE + '/api/templates/import',{ method:'POST', body: fd, credentials: API_BASE ? 'include' : 'same-origin', headers: authHeaders() });
-  if(!r.ok){ alert('Import failed'); return; }
-  const { name, content, defaults } = await r.json();
-  document.getElementById('template-name').value = name || 'Imported Template';
-  document.getElementById('template-content').value = content || '';
-  state.data = { ...defaults };
+  const text = await f.text();
+  document.getElementById('template-name').value = (f.name||'Imported').replace(/\.[^.]+$/, '');
+  document.getElementById('template-content').value = text || '';
+  state.data = {};
   updateVars();
 }
 
