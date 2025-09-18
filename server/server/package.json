@@ -6,7 +6,6 @@
     "pg-connection-string": "^2.9.1",
     "pg-pool": "^3.10.1",
     "pgpass": "^1.0.5",
-    "serverless-http": "^3.2.0",
     "split2": "^4.2.0"
   }
 }

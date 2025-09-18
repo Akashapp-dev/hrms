@@ -1,15 +1,7 @@
 [build]
-# No bundling step; publish the site root where index.html, styles.css, app.js live
-command = "npm --prefix server ci && npm --prefix server run build"
-publish = "public/dist"
+  command = "npm --prefix server install && npm --prefix server run build"
+  publish = "public/dist"
+  base = "."
 
-[functions]
-directory = "netlify/functions"
-node_bundler = "esbuild"
-
-# Send /api/* to our single serverless function
-[[redirects]]
-from = "/api/*"
-to = "/.netlify/functions/api/:splat"
-status = 200
-force = true
+[build.environment]
+  NODE_VERSION = "22.19.0"
