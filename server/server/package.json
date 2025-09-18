@@ -1,5 +1,12 @@
 {
   "dependencies": {
-    "hrms-template-app": "file:.."
+    "hrms-template-app": "file:..",
+    "pg": "^8.16.3",
+    "pg-cloudflare": "^1.2.7",
+    "pg-connection-string": "^2.9.1",
+    "pg-pool": "^3.10.1",
+    "pgpass": "^1.0.5",
+    "serverless-http": "^4.0.0",
+    "split2": "^4.2.0"
   }
 }
