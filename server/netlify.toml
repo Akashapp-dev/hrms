@@ -1,7 +1,12 @@
 [build]
-  command = "npm --prefix server install && npm --prefix server run build"
-  publish = "public/dist"
-  base = "."
+  command = "npm --prefix server install && npm --prefix server run build && npm run build"
+  publish = "public/dist"      # change to your frontend build output
+  base = ""                    # set if monorepo subdir
 
-[build.environment]
-  NODE_VERSION = "22.19.0"
+[dev]
+  command = "netlify dev"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/server/:splat"
+  status = 200
