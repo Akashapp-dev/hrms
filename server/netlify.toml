@@ -1,8 +1,15 @@
 [build]
-# run the build *inside* the server folder
-command = "cd server && npm ci && npm run build"
-# publish the whole public folder (it contains index.html and /dist assets)
-publish = "public"
+# No bundling step; publish the site root where index.html, styles.css, app.js live
+publish = "."
+command = ""
 
-[build.environment]
-NODE_VERSION = "20"
+[functions]
+directory = "netlify/functions"
+node_bundler = "esbuild"
+
+# Send /api/* to our single serverless function
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/api/:splat"
+status = 200
+force = true

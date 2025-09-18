@@ -1,25 +1,27 @@
 {
-  "name": "hrms-template-app",
-  "version": "0.1.0",
+  "name": "hrms-netlify",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "esbuild ../public/app.js --bundle --minify --format=esm --outfile=../public/dist/app.js && esbuild ../public/styles.css --minify --outfile=../public/dist/styles.css && node ./scripts/minify-html.js"
+    "start": "netlify dev"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.8.1",
     "@sparticuz/chromium": "^122.0.0",
-    "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
     "mammoth": "^1.7.1",
     "multer": "^1.4.5-lts.1",
     "nanoid": "^5.0.7",
     "puppeteer": "^22.15.0",
-    "puppeteer-core": "^22.15.0"
+    "puppeteer-core": "^22.15.0",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
+    "serverless-http": "^3.2.0"
   },
   "devDependencies": {
     "esbuild": "0.23.1"
