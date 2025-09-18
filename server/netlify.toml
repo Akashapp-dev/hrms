@@ -1,7 +1,7 @@
 [build]
 # No bundling step; publish the site root where index.html, styles.css, app.js live
-publish = "."
-command = ""
+command = "npm --prefix server ci && npm --prefix server run build"
+publish = "public/dist"
 
 [functions]
 directory = "netlify/functions"
