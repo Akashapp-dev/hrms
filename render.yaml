@@ -1,24 +1,23 @@
-# render.yaml
 services:
   - type: web
     name: hrms-app
     env: node
     plan: free
-    rootDir: . # ✅ ensures Render looks in repo root
+    rootDir: .
     buildCommand: npm install && npm --prefix server run build
     startCommand: node server/server.js
     envVars:
       - key: NODE_VERSION
         value: 22
       - key: DATABASE_URL
-        sync: false # add in Render dashboard
+        sync: false
       - key: JWT_SECRET
-        sync: false # add in Render dashboard
+        sync: false
       - key: CORS_ORIGIN
-        sync: false # e.g. https://your-frontend.netlify.app
+        sync: false
       - key: SEED_USERNAME
-        sync: false # optional for seeding admin
+        sync: false
       - key: SEED_PASSWORD
-        sync: false # optional for seeding admin
+        sync: false
       - key: SEED_ROLE
         value: admin

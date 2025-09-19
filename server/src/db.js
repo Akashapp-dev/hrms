@@ -1,3 +1,4 @@
+import '../load-env.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,7 +9,7 @@ import { neon } from '@neondatabase/serverless';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const usePg = !!process.env.DATABASE_URL;
+const usePg = (process.env.DATA_MODE || '').toLowerCase() !== 'json' && !!process.env.DATABASE_URL;
 const sql = usePg ? neon(process.env.DATABASE_URL) : null;
 
 // ---------------- File fallback for local/dev ----------------

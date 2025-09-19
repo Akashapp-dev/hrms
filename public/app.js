@@ -323,7 +323,6 @@ async function viewCompose(){
     <div class="editor-preview" style="margin-top:8px">
       <div class="placeholders-panel">
         <h3 class="subhead" style="margin:0 0 6px">Placeholders</h3>
-        <p class="hint" style="color:var(--muted);margin:0 0 8px">Fields appear based on placeholders in the selected template.</p>
         <div id="vars"></div>
         <h3 class="subhead">Common Fields</h3>
         <div id="custom-fields"></div>
@@ -465,14 +464,32 @@ function updateVars(){
   });
 
   if(total>PAGE_SIZE){
-    const nav=document.createElement('div'); nav.className='row'; nav.style.justifyContent='space-between'; nav.style.alignItems='center'; nav.style.marginTop='6px';
-    const info=document.createElement('div'); info.className='hint'; info.textContent=`Placeholders ${start+1}-${Math.min(end,total)} of ${total}`;
-    const btns=document.createElement('div'); btns.className='row'; btns.style.gap='6px';
-    const prev=document.createElement('button'); prev.textContent='Prev'; prev.className='secondary'; prev.disabled=state.varsPage<=0;
+    const nav=document.createElement('div');
+    nav.className='placeholder-nav';
+    const info=document.createElement('div');
+    info.className='hint page-info';
+    info.textContent='Placeholders '+(start+1)+'-'+Math.min(end,total)+' of '+total;
+    const btns=document.createElement('div');
+    btns.className='pager-buttons';
+    const prev=document.createElement('button');
+    prev.type='button';
+    prev.className='secondary pager-btn';
+    prev.textContent='Prev';
+    prev.disabled=state.varsPage<=0;
+    prev.setAttribute('aria-label','Previous placeholders');
     prev.onclick=()=>{ const newPage=Math.max(0,state.varsPage-1); const firstKey=vars[newPage*PAGE_SIZE]; state.varsPage=newPage; updateVars(); panel.scrollTop=0; if(firstKey) setTimeout(()=>scrollPreviewToVar(firstKey,{behavior:'smooth'}),0); };
-    const next=document.createElement('button'); next.textContent='Next'; next.className='secondary'; next.disabled=state.varsPage>=totalPages-1;
+    const next=document.createElement('button');
+    next.type='button';
+    next.className='secondary pager-btn';
+    next.textContent='Next';
+    next.disabled=state.varsPage>=totalPages-1;
+    next.setAttribute('aria-label','Next placeholders');
     next.onclick=()=>{ const newPage=Math.min(totalPages-1,state.varsPage+1); const firstKey=vars[newPage*PAGE_SIZE]; state.varsPage=newPage; updateVars(); panel.scrollTop=0; if(firstKey) setTimeout(()=>scrollPreviewToVar(firstKey,{behavior:'smooth'}),0); };
-    btns.appendChild(prev); btns.appendChild(next); nav.appendChild(info); nav.appendChild(btns); panel.appendChild(nav);
+    btns.appendChild(prev);
+    btns.appendChild(next);
+    nav.appendChild(info);
+    nav.appendChild(btns);
+    panel.appendChild(nav);
   }
   const btn = $('#render-btn'); if(btn) btn.disabled = !state.user || state.user.role==='viewer' || !content;
   const dBtn = document.getElementById('download-btn'); if(dBtn) dBtn.disabled = !content;
@@ -534,16 +551,50 @@ function renderText(tpl, data){
 }
 async function downloadDocClient(){
   const content = getActiveContent(); if(!content) return alert('Add some content first');
-  const t = state.templates.find(x=>x.id==state.currentId);
+  const tpl = state.templates.find(x=>x.id==state.currentId);
   const date = new Date().toISOString().slice(0,10);
-  let name = prompt('Enter file name', `${(t?.name||'document')}-${date}.html`); if(name==null) return;
-  name = name.trim() || `document-${date}.html`;
-  if(!/\.(html?|txt)$/i.test(name)) name += '.html';
-  const html = `<!doctype html><meta charset="utf-8"><title>${name}</title><pre style="white-space:pre-wrap;font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial">${renderText(content, state.data)}</pre>`;
-  const blob = new Blob([html], { type: name.endsWith('.txt')?'text/plain':'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  let desired = prompt('Enter file name', `${(tpl?.name||'document')}-${date}.pdf`);
+  if(desired == null) return;
+  desired = (desired || '').trim();
+  if(!desired) desired = `document-${date}.pdf`;
+  if(!/\.pdf$/i.test(desired)) desired += '.pdf';
+
+  if(NO_BACKEND){
+    alert('PDF download requires the server API. Falling back to HTML download.');
+    const html = `<!doctype html><meta charset="utf-8"><title>${desired}</title><pre style="white-space:pre-wrap;font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial">${renderText(content, state.data)}</pre>`;
+    const blob = new Blob([html], { type:'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = desired.replace(/\.pdf$/i, '.html'); document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  try{
+    const payload = {
+      templateId: state.currentId || null,
+      content,
+      data: state.data,
+      fileName: desired,
+    };
+    const res = await fetch(API_BASE + '/api/documents/pdf', {
+      method:'POST',
+      headers: authHeaders({ 'Content-Type':'application/json' }),
+      credentials:'include',
+      body: JSON.stringify(payload),
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error(errText || `Request failed with ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = desired; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    try { state.docs = await api.listDocs(); } catch {}
+  } catch (err) {
+    console.error('PDF download failed:', err);
+    alert('Failed to download PDF: ' + (err.message || 'Unknown error'));
+  }
 }
 
 // upload/import basic

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "hrms-netlify": "file:..",
     "hrms-template-app": "file:.."
   }
 }
